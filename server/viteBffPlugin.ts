@@ -1,6 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin, PreviewServer, ViteDevServer } from 'vite';
 import {
+  handleAdminCatalogue,
+  handleAdminSaveCategory,
+  handleAdminSaveItem,
+  handlePublicCatalogue,
+} from './catalogueBff.js';
+import {
   handleAdminMembers,
   handleEmployeeLogin,
   handleEmployeeLogout,
@@ -20,6 +26,10 @@ const handlers = new Map<string, Handler>([
   ['/api/v1/auth/employee/session', handleEmployeeSession],
   ['/api/v1/auth/employee/logout', handleEmployeeLogout],
   ['/api/v1/admin/members', handleAdminMembers],
+  ['/api/v1/catalogue', handlePublicCatalogue],
+  ['/api/v1/admin/catalogue', handleAdminCatalogue],
+  ['/api/v1/admin/catalogue/category', handleAdminSaveCategory],
+  ['/api/v1/admin/catalogue/item', handleAdminSaveItem],
 ]);
 
 function requestUrl(request: IncomingMessage): string {
@@ -91,12 +101,12 @@ function mount(server: ConnectServer, env: Record<string, string | undefined>) {
 }
 
 /**
- * Serves the same employee/admin BFF core during `vite` and `vite preview`.
- * Production serverless deployments use the root `/api` adapters instead.
+ * Serves employee/admin and catalogue BFF handlers during Vite dev/preview.
+ * Production serverless deployments use the same root `/api` handlers.
  */
 export function aidaBffPlugin(env: Record<string, string | undefined>): Plugin {
   return {
-    name: 'aida-employee-bff',
+    name: 'aida-bff',
     configureServer(server) {
       mount(server, env);
     },
