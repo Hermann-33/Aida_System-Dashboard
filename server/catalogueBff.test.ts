@@ -41,13 +41,14 @@ function adminProfile(role: 'admin' | 'owner' | 'staff' = 'admin') {
 }
 
 function dashboardRequest(path: string, init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+  headers.set('cookie', 'aida_employee_access=admin-access; aida_employee_refresh=refresh-token');
+  if (init.method && init.method !== 'GET') {
+    headers.set('origin', 'https://dashboard.example');
+  }
   return new Request(`https://dashboard.example${path}`, {
     ...init,
-    headers: {
-      cookie: 'aida_employee_access=admin-access; aida_employee_refresh=refresh-token',
-      ...(init.method && init.method !== 'GET' ? { origin: 'https://dashboard.example' } : {}),
-      ...Object.fromEntries(new Headers(init.headers).entries()),
-    },
+    headers,
   });
 }
 
