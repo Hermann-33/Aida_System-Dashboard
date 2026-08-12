@@ -1,140 +1,168 @@
-import { Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ImageOff, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { Coffee, Croissant, CupSoda, Leaf, Plus, Sandwich, Star } from 'lucide-react';
-import {
-  PREVIEW_CATEGORIES,
-  PREVIEW_MENU,
-  PREVIEW_MODIFIER_GROUPS,
-  type PreviewCategory,
-  type PreviewMenuItem,
-} from '../../preview/fixtures/catalog';
+import { Link, useNavigate } from 'react-router-dom';
 import { formatRmFromSen } from '../../shared/formatting/money';
+import {
+  fetchAdminCatalogue,
+  saveCatalogueCategory,
+  saveCatalogueItem,
+} from '../catalogue/catalogueClient';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdminPageShell } from './AdminPageShell';
 import './admin.css';
 
 type Tab = 'items' | 'categories' | 'variants';
 
-/** No real photo pipeline exists yet (catalogue API pending) — a solid
- * tone plus a category glyph stands in for a photo without pretending one
- * exists, matching the same swatch-as-photo convention the POS product
- * cards already use. */
-const CATEGORY_ICON: Record<PreviewCategory, typeof Coffee> = {
-  All: Star,
-  Coffee: Coffee,
-  'Iced Drinks': CupSoda,
-  Tea: Leaf,
-  Food: Sandwich,
-  Pastries: Croissant,
-  Favourites: Star,
-};
+const ADMIN_CATALOGUE_QUERY = ['admin-catalogue'] as const;
 
-const TONE_PRESETS = [
-  '#C92F50',
-  '#541A28',
-  '#2C171B',
-  '#9A7F7A',
-  '#6B3A2A',
-  '#5B7C99',
-  '#DE8D9D',
-  '#C8A345',
-  '#36735B',
-  '#B7782F',
-];
-
-const ADD_ITEM_CATEGORIES = PREVIEW_CATEGORIES.filter((c) => c !== 'All');
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-}
-
-/** Categories and Variants used to be their own top-level pages, but
- * they're both supporting data *for* the menu, not destinations in their
- * own right — they're tabs here now, next to the item list they describe. */
 export function AdminMenuPage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>('items');
-  const [items, setItems] = useState(PREVIEW_MENU);
-  const categoryCounts = PREVIEW_CATEGORIES.filter((c) => c !== 'All').map((cat) => ({
-    category: cat,
-    count: PREVIEW_MENU.filter((m) => m.category === cat).length,
-  }));
-
   const [addOpen, setAddOpen] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<PreviewCategory>('Coffee');
+  const [categoryId, setCategoryId] = useState('');
   const [priceRm, setPriceRm] = useState('0.00');
   const [route, setRoute] = useState<'bar' | 'kitchen'>('bar');
-  const [tone, setTone] = useState(TONE_PRESETS[0] ?? '#541A28');
+  const [kind, setKind] = useState<'product' | 'addon'>('product');
+  const [categoryName, setCategoryName] = useState('');
+  const [error, setError] = useState('');
+
+  const catalogue = useQuery({
+    queryKey: ADMIN_CATALOGUE_QUERY,
+    queryFn: fetchAdminCatalogue,
+  });
+
+  const items = catalogue.data?.items ?? [];
+  const categories = catalogue.data?.categories ?? [];
+
+  const addItem = useMutation({
+    mutationFn: saveCatalogueItem,
+    onSuccess: async (id) => {
+      await queryClient.invalidateQueries({ queryKey: ADMIN_CATALOGUE_QUERY });
+      closeAddDialog();
+      navigate(`/admin/catalogue/menu/${id}`);
+    },
+    onError: (cause) => setError(cause instanceof Error ? cause.message : 'Unable to add item.'),
+  });
+
+  const addCategory = useMutation({
+    mutationFn: saveCatalogueCategory,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ADMIN_CATALOGUE_QUERY });
+      setCategoryOpen(false);
+      setCategoryName('');
+      setError('');
+    },
+    onError: (cause) => setError(cause instanceof Error ? cause.message : 'Unable to add category.'),
+  });
 
   function closeAddDialog() {
     setAddOpen(false);
     setName('');
-    setCategory('Coffee');
+    setCategoryId('');
     setPriceRm('0.00');
     setRoute('bar');
-    setTone(TONE_PRESETS[0] ?? '#541A28');
+    setKind('product');
+    setError('');
   }
 
-  function handleAddItem(e: FormEvent) {
-    e.preventDefault();
+  function openAddDialog() {
+    setCategoryId(categories[0]?.id ?? '');
+    setError('');
+    setAddOpen(true);
+  }
+
+  function handleAddItem(event: FormEvent) {
+    event.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed) return;
-    const slug = slugify(trimmed) || `item-${items.length + 1}`;
-    const newItem: PreviewMenuItem = {
-      id: `custom-${slug}`,
+    const priceSen = Math.round(Number(priceRm) * 100);
+    if (!trimmed || !categoryId || !Number.isFinite(priceSen) || priceSen < 0) {
+      setError('Name, category and a valid non-negative price are required.');
+      return;
+    }
+    addItem.mutate({
+      categoryId,
       name: trimmed,
-      category,
-      priceSen: Math.max(0, Math.round(Number(priceRm) * 100) || 0),
-      available: true,
-      sku: `NEW-${slug.slice(0, 3).toUpperCase() || 'ITM'}`,
-      route,
-      imageTone: tone,
-      compactLabel: trimmed.slice(0, 3).toUpperCase(),
-    };
-    setItems((prev) => [...prev, newItem]);
-    closeAddDialog();
+      kind,
+      description: '',
+      basePriceSen: priceSen,
+      isAvailable: true,
+      isPublished: true,
+      isFeatured: false,
+      isBestSeller: false,
+      isStudentEligible: false,
+      prepRoute: route,
+      sortOrder: items.filter((item) => item.categoryId === categoryId).length * 10 + 10,
+      variants: [],
+      compatibleAddOnIds: [],
+    });
+  }
+
+  function handleAddCategory(event: FormEvent) {
+    event.preventDefault();
+    const trimmed = categoryName.trim();
+    if (!trimmed) {
+      setError('Category name is required.');
+      return;
+    }
+    addCategory.mutate({
+      name: trimmed,
+      sortOrder: categories.length * 10 + 10,
+      isActive: true,
+    });
   }
 
   return (
     <AdminPageShell
       pageId="admin-menu"
       title="Menu management"
-      hint="Open an item to edit base price and availability."
+      hint="This catalogue is shared with the customer app. Published changes invalidate the app catalogue revision automatically."
       actions={
-        <button type="button" className="btn-primary" onClick={() => setAddOpen(true)}>
+        <button type="button" className="btn-primary" onClick={openAddDialog} disabled={!categories.length}>
           <Plus size={16} aria-hidden="true" />
           Add item
         </button>
       }
     >
-      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
-        <TabsList>
-          <TabsTrigger value="items">Items</TabsTrigger>
-          <TabsTrigger value="categories">Categories</TabsTrigger>
-          <TabsTrigger value="variants">Variants</TabsTrigger>
-        </TabsList>
+      {catalogue.isPending && <p className="form-hint">Loading shared catalogue…</p>}
+      {catalogue.isError && (
+        <div className="empty-state" role="alert">
+          <p>{catalogue.error instanceof Error ? catalogue.error.message : 'Unable to load catalogue.'}</p>
+          <button type="button" className="btn-secondary" onClick={() => void catalogue.refetch()}>
+            Retry
+          </button>
+        </div>
+      )}
 
-        <TabsContent value="items">
-          <table className="data-table admin-table">
-            <thead>
-              <tr>
-                <th />
-                <th>Name</th>
-                <th>SKU</th>
-                <th>Category</th>
-                <th>Price</th>
-                <th>Route</th>
-                <th>Available</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => {
-                const Icon = CATEGORY_ICON[item.category];
-                return (
+      {catalogue.data && (
+        <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
+          <TabsList>
+            <TabsTrigger value="items">Items</TabsTrigger>
+            <TabsTrigger value="categories">Categories</TabsTrigger>
+            <TabsTrigger value="variants">Variants</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="items">
+            <p className="form-hint">Catalogue revision {catalogue.data.revision}</p>
+            <table className="data-table admin-table">
+              <thead>
+                <tr>
+                  <th />
+                  <th>Name</th>
+                  <th>SKU</th>
+                  <th>Category</th>
+                  <th>Price</th>
+                  <th>Route</th>
+                  <th>Published</th>
+                  <th>Available</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
                   <tr key={item.id}>
                     <td>
                       {item.imageUrl ? (
@@ -147,172 +175,149 @@ export function AdminMenuPage() {
                           loading="lazy"
                         />
                       ) : (
-                        <span
-                          className="menu-item-thumb"
-                          style={{ backgroundColor: item.imageTone }}
-                          aria-hidden="true"
-                          title="No photo yet — added this session, preview only"
-                        >
-                          <Icon size={18} />
+                        <span className="menu-item-thumb" aria-hidden="true">
+                          <ImageOff size={18} />
                         </span>
                       )}
                     </td>
                     <td>{item.name}</td>
                     <td>{item.sku}</td>
-                    <td>{item.category}</td>
-                    <td>{formatRmFromSen(item.priceSen)}</td>
-                    <td>{item.route}</td>
-                    <td>{item.available ? 'Yes' : 'No'}</td>
+                    <td>{item.categoryName}</td>
+                    <td>{formatRmFromSen(item.basePriceSen)}</td>
+                    <td>{item.prepRoute}</td>
+                    <td>{item.isPublished ? 'Yes' : 'No'}</td>
+                    <td>{item.isAvailable ? 'Yes' : 'No'}</td>
                     <td>
                       <Link to={`/admin/catalogue/menu/${item.id}`} className="btn-secondary btn-sm">
                         Edit
                       </Link>
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+            {items.length === 0 && <div className="empty-state"><p>No catalogue items.</p></div>}
+          </TabsContent>
 
-          {items.length === 0 && (
-            <div className="empty-state">
-              <h2 className="admin-section-title">No menu items</h2>
-              <p>Publish a menu when catalogue API is ready.</p>
+          <TabsContent value="categories">
+            <div className="admin-section-heading-row">
+              <p className="form-hint">Category order and visibility are shared with the customer app.</p>
+              <button type="button" className="btn-secondary" onClick={() => { setError(''); setCategoryOpen(true); }}>
+                <Plus size={15} aria-hidden="true" /> Add category
+              </button>
             </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="categories">
-          <p className="form-hint">POS category rail order — preview only.</p>
-          <table className="data-table admin-table">
-            <thead>
-              <tr>
-                <th>Category</th>
-                <th>Items</th>
-                <th>Visible on POS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {categoryCounts.map((row) => (
-                <tr key={row.category}>
-                  <td>{row.category}</td>
-                  <td>{row.count}</td>
-                  <td>Yes</td>
+            <table className="data-table admin-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Items</th>
+                  <th>Active</th>
+                  <th>Order</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </TabsContent>
-
-        <TabsContent value="variants">
-          <p className="form-hint">Master PRD modifier contract — editing pending Team 2 catalogue API.</p>
-          {PREVIEW_MODIFIER_GROUPS.map((group) => (
-            <article key={group.id} className="modifier-group-card">
-              <header>
-                <h2 className="admin-section-title">{group.name}</h2>
-                <span className="form-hint">
-                  {group.required ? 'Required' : 'Optional'} · min {group.min} · max {group.max}
-                </span>
-              </header>
-              {group.help ? <p className="form-hint">{group.help}</p> : null}
-              <table className="data-table admin-table">
-                <thead>
-                  <tr>
-                    <th>Option</th>
-                    <th>Price delta</th>
-                    <th>Available</th>
+              </thead>
+              <tbody>
+                {categories.map((category) => (
+                  <tr key={category.id}>
+                    <td>{category.name}</td>
+                    <td>{category.itemCount}</td>
+                    <td>{category.isActive ? 'Yes' : 'No'}</td>
+                    <td>{category.sortOrder}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {group.options.map((opt) => (
-                    <tr key={opt.id}>
-                      <td>{opt.label}</td>
-                      <td>
-                        {formatRmFromSen(Math.abs(opt.priceDeltaSen))}
-                        {opt.priceDeltaSen < 0 ? ' (discount)' : opt.priceDeltaSen > 0 ? ' (add)' : ''}
-                      </td>
-                      <td>{opt.available === false ? 'No' : 'Yes'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </article>
-          ))}
-        </TabsContent>
-      </Tabs>
+                ))}
+              </tbody>
+            </table>
+          </TabsContent>
+
+          <TabsContent value="variants">
+            <p className="form-hint">Variants are item-specific. Open an item to edit labels, price deltas and availability.</p>
+            <table className="data-table admin-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Variant</th>
+                  <th>Delta</th>
+                  <th>Default</th>
+                  <th>Available</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.flatMap((item) => item.variants.map((variant) => (
+                  <tr key={variant.id}>
+                    <td>{item.name}</td>
+                    <td>{variant.label}</td>
+                    <td>{variant.priceDeltaSen === 0 ? '—' : formatRmFromSen(variant.priceDeltaSen)}</td>
+                    <td>{variant.isDefault ? 'Yes' : 'No'}</td>
+                    <td>{variant.isAvailable ? 'Yes' : 'No'}</td>
+                  </tr>
+                )))}
+              </tbody>
+            </table>
+          </TabsContent>
+        </Tabs>
+      )}
 
       {addOpen && (
         <div className="confirm-dialog-overlay" role="presentation" onClick={closeAddDialog}>
-          <div
-            className="confirm-dialog confirm-dialog--wide"
-            role="dialog"
-            aria-labelledby="add-item-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="add-item-title" className="admin-section-title">
-              Add menu item
-            </h2>
-            <p className="form-hint">Added to this preview session only — no catalogue API yet.</p>
+          <div className="confirm-dialog confirm-dialog--wide" role="dialog" aria-labelledby="add-item-title" onClick={(event) => event.stopPropagation()}>
+            <h2 id="add-item-title" className="admin-section-title">Add menu item</h2>
+            <p className="form-hint">The database creates the item ID, slug and default SKU when you save.</p>
             <form className="admin-form" onSubmit={handleAddItem}>
               <label>
                 Name
-                <input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+                <input value={name} onChange={(event) => setName(event.target.value)} required autoFocus />
               </label>
               <label>
                 Category
-                <select value={category} onChange={(e) => setCategory(e.target.value as PreviewCategory)}>
-                  {ADD_ITEM_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
+                <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} required>
+                  {categories.filter((category) => category.isActive).map((category) => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
                   ))}
+                </select>
+              </label>
+              <label>
+                Type
+                <select value={kind} onChange={(event) => setKind(event.target.value as 'product' | 'addon')}>
+                  <option value="product">Product</option>
+                  <option value="addon">Add-on</option>
                 </select>
               </label>
               <label>
                 Base price (RM)
-                <input
-                  type="number"
-                  min="0"
-                  step="0.10"
-                  value={priceRm}
-                  onChange={(e) => setPriceRm(e.target.value)}
-                />
+                <input type="number" min="0" step="0.01" value={priceRm} onChange={(event) => setPriceRm(event.target.value)} required />
               </label>
               <label>
-                Route
-                <select value={route} onChange={(e) => setRoute(e.target.value as 'bar' | 'kitchen')}>
+                Preparation route
+                <select value={route} onChange={(event) => setRoute(event.target.value as 'bar' | 'kitchen')}>
                   <option value="bar">Bar</option>
                   <option value="kitchen">Kitchen</option>
                 </select>
               </label>
-              <div>
-                <span className="form-hint" id="tone-label">
-                  Placeholder photo tone
-                </span>
-                <div className="menu-item-thumb-picker" role="group" aria-labelledby="tone-label">
-                  {TONE_PRESETS.map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      className={
-                        preset === tone
-                          ? 'menu-item-thumb-picker__swatch menu-item-thumb-picker__swatch--active'
-                          : 'menu-item-thumb-picker__swatch'
-                      }
-                      style={{ backgroundColor: preset }}
-                      aria-label={`Tone ${preset}`}
-                      aria-pressed={preset === tone}
-                      onClick={() => setTone(preset)}
-                    />
-                  ))}
-                </div>
-              </div>
+              {error && <p role="alert" className="form-error">{error}</p>}
               <div className="confirm-dialog__actions">
-                <button type="button" className="btn-secondary" onClick={closeAddDialog}>
-                  Cancel
+                <button type="button" className="btn-secondary" onClick={closeAddDialog}>Cancel</button>
+                <button type="submit" className="btn-primary" disabled={addItem.isPending}>
+                  {addItem.isPending ? 'Saving…' : 'Add item'}
                 </button>
-                <button type="submit" className="btn-primary">
-                  Add item
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {categoryOpen && (
+        <div className="confirm-dialog-overlay" role="presentation" onClick={() => setCategoryOpen(false)}>
+          <div className="confirm-dialog" role="dialog" aria-labelledby="add-category-title" onClick={(event) => event.stopPropagation()}>
+            <h2 id="add-category-title" className="admin-section-title">Add category</h2>
+            <form className="admin-form" onSubmit={handleAddCategory}>
+              <label>
+                Name
+                <input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} required autoFocus />
+              </label>
+              {error && <p role="alert" className="form-error">{error}</p>}
+              <div className="confirm-dialog__actions">
+                <button type="button" className="btn-secondary" onClick={() => setCategoryOpen(false)}>Cancel</button>
+                <button type="submit" className="btn-primary" disabled={addCategory.isPending}>
+                  {addCategory.isPending ? 'Saving…' : 'Add category'}
                 </button>
               </div>
             </form>
@@ -321,8 +326,4 @@ export function AdminMenuPage() {
       )}
     </AdminPageShell>
   );
-}
-
-export function findPreviewMenuItem(id: string): PreviewMenuItem | undefined {
-  return PREVIEW_MENU.find((i) => i.id === id);
 }
