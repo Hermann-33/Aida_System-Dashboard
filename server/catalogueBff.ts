@@ -88,7 +88,15 @@ async function requireAdmin(
   request: Request,
   deps: EmployeeBffDependencies,
 ): Promise<AdminSession | Response> {
-  const sessionResponse = await handleEmployeeSession(request, deps);
+  // The employee session endpoint is intentionally GET-only. Catalogue
+  // mutations validate the same cookies through a synthetic GET request rather
+  // than weakening the existing auth handler to accept arbitrary methods.
+  const sessionUrl = new URL('/api/v1/auth/employee/session', request.url);
+  const sessionRequest = new Request(sessionUrl, {
+    method: 'GET',
+    headers: request.headers,
+  });
+  const sessionResponse = await handleEmployeeSession(sessionRequest, deps);
   if (!sessionResponse.ok) return sessionResponse;
 
   const body = await sessionResponse.clone().json().catch(() => ({})) as SessionBody;
@@ -116,12 +124,11 @@ async function rpc(
     return json({ error: 'Backend configuration is unavailable', code: 'BACKEND_CONFIGURATION_MISSING' }, 503);
   }
 
-  const response = await cfg.fetchImpl(`${cfg.url}/rest/v1/rpc/${functionName}`, {
+  return cfg.fetchImpl(`${cfg.url}/rest/v1/rpc/${functionName}`, {
     method: 'POST',
     headers: upstreamHeaders(cfg.key, accessToken),
     body: JSON.stringify(body),
   });
-  return response;
 }
 
 export async function handlePublicCatalogue(
