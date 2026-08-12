@@ -1,3 +1,5 @@
+import { employeeFetch } from '../../auth/employeeSession';
+
 export type AdminMember = {
   memberId: string;
   userId: string;
@@ -14,15 +16,17 @@ type MemberDirectoryPayload = {
   members: AdminMember[];
 };
 
+type MemberFetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
 /**
  * Reads the admin member directory through the trusted same-origin API.
  *
  * The browser never receives a Supabase service key and never falls back to a
- * fixture. The server/BFF must authenticate the HttpOnly employee session and
- * execute the backend's admin-only member-directory capability.
+ * fixture. The BFF authenticates the HttpOnly employee session and executes
+ * the admin-only member-directory RPC with that caller's JWT, preserving RLS.
  */
 export async function fetchAdminMembers(
-  fetcher: typeof fetch = fetch,
+  fetcher: MemberFetcher = employeeFetch,
 ): Promise<AdminMember[]> {
   const response = await fetcher('/api/v1/admin/members', {
     method: 'GET',
