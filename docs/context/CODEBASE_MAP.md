@@ -1,6 +1,6 @@
 # Codebase Map
 
-Updated: 2026-08-12
+Updated: 2026-08-13
 
 ## Customer
 
@@ -21,6 +21,9 @@ Updated: 2026-08-12
 - `api/v1/catalogue.ts` and `api/v1/admin/catalogue*` — deployment adapters.
 - `src/features/catalogue/catalogueClient.ts` — browser contracts.
 - `AdminMenuPage.tsx` / `AdminMenuEditorPage.tsx` — live DB management.
+- `src/features/pos/posCatalogue.ts` — maps the shared snapshot into POS category/product/variant/compatible-add-on presentation.
+- `src/features/pos/CounterWorkspace.tsx` / `ModifierSheet.tsx` — shared catalogue browsing/configuration; cart/order/payment remains preview and untrusted.
 - `server/catalogueBff.test.ts` — BFF authorization contract tests.
+- `AdminMenuFlows.test.tsx`, `posCatalogue.test.ts`, `CounterWorkspace.test.tsx` — Admin payload and POS shared-catalogue coverage.
 
-POS checkout preview remains separate from Admin catalogue authority.
+POS order, total, checkout and payment preview remain separate from catalogue authority.

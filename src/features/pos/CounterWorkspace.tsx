@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Clock,
   HelpCircle,
@@ -12,17 +13,12 @@ import {
 } from 'lucide-react';
 import type { EmployeeIdentity, ShiftSummary, TerminalLocation } from '../../auth/types';
 import {
-  PREVIEW_CATEGORIES,
-  PREVIEW_MENU,
-  PREVIEW_MODIFIER_GROUPS,
   PREVIEW_TERMINALS,
   PREVIEW_TRANSACTIONS,
   PREVIEW_VARIANCE_THRESHOLD_SEN,
   type ConnectionState,
   type OrderType,
-  type PreviewCategory,
   type PreviewMember,
-  type PreviewMenuItem,
   type PreviewRewardOption,
   type PreviewTxn,
 } from '../../preview/fixtures/catalog';
@@ -40,6 +36,17 @@ import { MemberPanel } from './MemberPanel';
 import { ModifierSheet } from './ModifierSheet';
 import { CompletedSaleReceipt, PaymentPanel } from './PaymentPanel';
 import type { PreviewSaleReceipt } from './paymentReceipt';
+import {
+  fetchPublishedCatalogue,
+  type CatalogueItem,
+} from '../catalogue/catalogueClient';
+import {
+  ALL_POS_CATEGORIES,
+  compactCatalogueLabel,
+  posCatalogueCategories,
+  posCatalogueItems,
+  posModifierGroups,
+} from './posCatalogue';
 import {
   cartTotalSen,
   newCartLineId,
@@ -78,6 +85,8 @@ const ORDER_TYPE_LABELS: Record<OrderType, string> = {
   pickup: 'Pickup',
 };
 
+const POS_CATALOGUE_QUERY = ['pos-catalogue'] as const;
+
 function rewardDiscountSen(reward: PreviewRewardOption | null): number {
   if (!reward?.eligible) return 0;
   if (reward.kind === 'offer' && reward.label.includes('RM2')) return 200;
@@ -99,15 +108,19 @@ export function CounterWorkspace({
   connectionState,
   onConnectionStateChange,
 }: Props) {
+  const catalogue = useQuery({
+    queryKey: POS_CATALOGUE_QUERY,
+    queryFn: () => fetchPublishedCatalogue(),
+  });
   const [rail, setRail] = useState<RailId>('sale');
-  const [category, setCategory] = useState<PreviewCategory>('All');
+  const [categoryId, setCategoryId] = useState(ALL_POS_CATEGORIES);
   const [search, setSearch] = useState('');
   const [compactMenu, setCompactMenu] = useState(false);
   const [orderType, setOrderType] = useState<OrderType>('dine_in');
   const [cart, setCart] = useState<CartLine[]>([]);
   const [member, setMember] = useState<PreviewMember | null>(null);
   const [selectedReward, setSelectedReward] = useState<PreviewRewardOption | null>(null);
-  const [modifierItem, setModifierItem] = useState<PreviewMenuItem | null>(null);
+  const [modifierItem, setModifierItem] = useState<CatalogueItem | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [completedSale, setCompletedSale] = useState<PreviewSaleReceipt | null>(null);
   const [orderDrawerOpen, setOrderDrawerOpen] = useState(false);
@@ -133,17 +146,36 @@ export function CounterWorkspace({
   const discountSen = rewardDiscountSen(selectedReward);
   const totalSen = Math.max(0, cartTotalSen(cart) - discountSen);
 
+  const categories = useMemo(
+    () => catalogue.data ? posCatalogueCategories(catalogue.data) : [],
+    [catalogue.data],
+  );
+  const menuItems = useMemo(
+    () => catalogue.data ? posCatalogueItems(catalogue.data) : [],
+    [catalogue.data],
+  );
+  const modifierGroups = useMemo(
+    () => modifierItem && catalogue.data ? posModifierGroups(modifierItem, catalogue.data) : [],
+    [catalogue.data, modifierItem],
+  );
+
+  useEffect(() => {
+    if (categoryId !== ALL_POS_CATEGORIES && !categories.some((category) => category.id === categoryId)) {
+      setCategoryId(ALL_POS_CATEGORIES);
+    }
+  }, [categories, categoryId]);
+
   const filteredMenu = useMemo(() => {
-    let items = PREVIEW_MENU;
-    if (category !== 'All') {
-      items = items.filter((i) => i.category === category || (category === 'Favourites' && i.bestSeller));
+    let items = menuItems;
+    if (categoryId !== ALL_POS_CATEGORIES) {
+      items = items.filter((item) => item.categoryId === categoryId);
     }
     if (search.trim()) {
       const q = search.toLowerCase();
       items = items.filter((i) => i.name.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q));
     }
     return items;
-  }, [category, search]);
+  }, [categoryId, menuItems, search]);
 
   const filteredOrders = useMemo(() => {
     let rows = PREVIEW_TRANSACTIONS;
@@ -165,8 +197,8 @@ export function CounterWorkspace({
   const terminalFixture = PREVIEW_TERMINALS.find((t) => t.code === location.terminalCode)
     ?? PREVIEW_TERMINALS[0];
 
-  function addToCart(item: PreviewMenuItem) {
-    if (!item.available || completedSale) return;
+  function addToCart(item: CatalogueItem) {
+    if (!item.isAvailable || completedSale) return;
     setModifierItem(item);
   }
 
@@ -413,32 +445,59 @@ export function CounterWorkspace({
               </div>
             )}
 
-            <div role="tablist" aria-label="Categories" className="mt-4 flex flex-wrap gap-2">
-              {PREVIEW_CATEGORIES.map((cat) => (
+            {catalogue.isPending && <p className="mt-4 text-sm text-muted-foreground">Loading shared catalogue…</p>}
+            {catalogue.isError && (
+              <div className="mt-4 rounded-lg border border-destructive/40 bg-destructive/5 p-4" role="alert">
+                <p className="text-sm font-semibold text-destructive">The shared catalogue is unavailable.</p>
+                <p className="mt-1 text-sm text-muted-foreground">No preview menu is used as a fallback.</p>
+                <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void catalogue.refetch()}>
+                  Retry catalogue
+                </Button>
+              </div>
+            )}
+
+            {catalogue.data && <div role="tablist" aria-label="Categories" className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={categoryId === ALL_POS_CATEGORIES}
+                onClick={() => setCategoryId(ALL_POS_CATEGORIES)}
+                className={
+                  categoryId === ALL_POS_CATEGORIES
+                    ? 'rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground'
+                    : 'rounded-full border border-border bg-card px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground'
+                }
+              >
+                All
+              </button>
+              {categories.map((cat) => (
                 <button
-                  key={cat}
+                  key={cat.id}
                   type="button"
                   role="tab"
-                  aria-selected={category === cat}
-                  onClick={() => setCategory(cat)}
+                  aria-selected={categoryId === cat.id}
+                  onClick={() => setCategoryId(cat.id)}
                   className={
-                    category === cat
+                    categoryId === cat.id
                       ? 'rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground'
                       : 'rounded-full border border-border bg-card px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground'
                   }
                 >
-                  {cat}
+                  {cat.name}
                 </button>
               ))}
-            </div>
+            </div>}
 
-            <p aria-live="polite" className="mt-3 text-sm text-muted-foreground">
+            {catalogue.data && <p aria-live="polite" className="mt-3 text-sm text-muted-foreground">
               Showing {filteredMenu.length} item{filteredMenu.length === 1 ? '' : 's'} ·{' '}
-              {category === 'All' ? 'all categories' : category}
-            </p>
+              {categoryId === ALL_POS_CATEGORIES
+                ? 'all categories'
+                : categories.find((category) => category.id === categoryId)?.name ?? 'shared category'}
+              {' '}· catalogue revision {catalogue.data.revision}
+            </p>}
 
             <div
-              data-category={category}
+              data-category={categoryId}
               className={
                 compactMenu
                   ? 'mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-6'
@@ -449,7 +508,7 @@ export function CounterWorkspace({
                 <button
                   key={item.id}
                   type="button"
-                  disabled={!item.available}
+                  disabled={!item.isAvailable}
                   onClick={() => addToCart(item)}
                   className={
                     compactMenu
@@ -463,27 +522,22 @@ export function CounterWorkspace({
                       alt=""
                       loading="lazy"
                       className={
-                        item.available
+                        item.isAvailable
                           ? 'absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105'
                           : 'absolute inset-0 h-full w-full object-cover grayscale'
                       }
                     />
                   ) : (
-                    <span
-                      aria-hidden="true"
-                      title={`Tone ${item.imageTone}`}
-                      className="absolute inset-0"
-                      style={{ backgroundColor: item.imageTone }}
-                    />
+                    <span aria-hidden="true" className="absolute inset-0 bg-[var(--aida-burgundy)]" />
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
 
-                  {item.bestSeller && (
+                  {item.isBestSeller && (
                     <span className="absolute left-2 top-2 rounded-full bg-[var(--aida-gold)] px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-[var(--aida-espresso)]">
                       Best seller
                     </span>
                   )}
-                  {!item.available && (
+                  {!item.isAvailable && (
                     <span className="absolute right-2 top-2 rounded-full bg-destructive px-2 py-0.5 text-xs font-bold uppercase text-destructive-foreground">
                       Sold out
                     </span>
@@ -492,11 +546,11 @@ export function CounterWorkspace({
                   <div className="relative z-10 p-3 text-white">
                     {!compactMenu && (
                       <p className="text-xs font-bold uppercase tracking-widest text-white/80">
-                        {item.category}
+                        {item.categoryName}
                       </p>
                     )}
                     <p className={compactMenu ? 'text-sm font-bold leading-tight' : 'mt-1 text-lg font-bold leading-tight'}>
-                      {compactMenu ? item.compactLabel : item.name}
+                      {compactMenu ? compactCatalogueLabel(item.name) : item.name}
                     </p>
                     <p
                       className={
@@ -505,7 +559,7 @@ export function CounterWorkspace({
                           : 'mt-1 text-base font-bold text-[var(--aida-gold)]'
                       }
                     >
-                      {formatRmFromSen(item.priceSen)}
+                      {formatRmFromSen(item.basePriceSen)}
                     </p>
                   </div>
                 </button>
@@ -525,7 +579,7 @@ export function CounterWorkspace({
                 <ul className="mt-2 flex flex-col gap-1 text-sm text-muted-foreground">
                   {cart.map((line) => (
                     <li key={line.id}>
-                      {line.qty}× {line.name} → {PREVIEW_MENU.find((m) => m.id === line.menuItemId)?.route ?? 'bar'}
+                      {line.qty}× {line.name} → {catalogue.data?.items.find((item) => item.id === line.menuItemId)?.prepRoute ?? 'bar'}
                       {line.note && ` · Note: ${line.note}`}
                     </li>
                   ))}
@@ -1055,8 +1109,8 @@ export function CounterWorkspace({
       <ModifierSheet
         open={modifierItem !== null}
         itemName={modifierItem?.name ?? ''}
-        basePriceSen={modifierItem?.priceSen ?? 0}
-        groups={PREVIEW_MODIFIER_GROUPS}
+        basePriceSen={modifierItem?.basePriceSen ?? 0}
+        groups={modifierGroups}
         onConfirm={confirmModifier}
         onClose={() => setModifierItem(null)}
       />

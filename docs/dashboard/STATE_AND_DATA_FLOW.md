@@ -1,6 +1,6 @@
 # POS/Admin State and Data Flow
 
-Updated: 2026-08-12
+Updated: 2026-08-13
 
 ## Admin catalogue
 
@@ -20,6 +20,16 @@ Browser code never receives a service-role credential. A refreshed employee acce
 ## Cross-client propagation
 
 A successful save bumps `catalogue_revision`; the Flutter customer app listens to that row and re-fetches its public RLS-filtered snapshot.
+
+## POS catalogue read
+
+```text
+CounterWorkspace -> catalogueClient -> GET /api/v1/catalogue
+ -> get_catalogue (publishable key, public read)
+ -> posCatalogue adapter -> category cards / item cards / variants / compatible add-ons
+```
+
+No preview catalogue fallback is used when this request fails.
 
 ## Remaining preview
 

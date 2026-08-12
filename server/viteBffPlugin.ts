@@ -41,13 +41,13 @@ function requestUrl(request: IncomingMessage): string {
   return `${protocol}://${host}${request.url || '/'}`;
 }
 
-async function readBody(request: IncomingMessage): Promise<Uint8Array | undefined> {
+async function readBody(request: IncomingMessage): Promise<string | undefined> {
   if (request.method === 'GET' || request.method === 'HEAD') return undefined;
   const chunks: Uint8Array[] = [];
   for await (const chunk of request) {
     chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
   }
-  return chunks.length ? Buffer.concat(chunks) : undefined;
+  return chunks.length ? Buffer.concat(chunks).toString('utf8') : undefined;
 }
 
 async function toWebRequest(request: IncomingMessage): Promise<Request> {

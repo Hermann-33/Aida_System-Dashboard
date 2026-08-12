@@ -25,7 +25,11 @@ export function AdminMenuEditorPage() {
   });
 
   if (catalogue.isPending) {
-    return <AdminPageShell pageId="admin-menu-editor" title="Menu item editor" hint="Loading shared catalogue…" />;
+    return (
+      <AdminPageShell pageId="admin-menu-editor" title="Menu item editor" hint="Loading shared catalogue…">
+        {null}
+      </AdminPageShell>
+    );
   }
 
   if (catalogue.isError || !catalogue.data) {
@@ -118,7 +122,8 @@ function LoadedMenuEditor({ item, catalogue }: { item: CatalogueItem; catalogue:
     setVariants((current) => {
       const next = current.filter((_, i) => i !== index);
       if (next.length > 0 && !next.some((variant) => variant.isDefault)) {
-        next[0] = { ...next[0], isDefault: true };
+        const first = next[0];
+        if (first) next[0] = { ...first, isDefault: true };
       }
       return next;
     });

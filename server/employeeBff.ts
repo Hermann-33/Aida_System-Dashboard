@@ -88,7 +88,7 @@ function getConfig(deps: EmployeeBffDependencies) {
   return { url, key, fetchImpl: deps.fetchImpl ?? fetch };
 }
 
-function json(body: unknown, status = 200, extraHeaders?: HeadersInit): Response {
+function json(body: unknown, status = 200, extraHeaders?: ConstructorParameters<typeof Headers>[0]): Response {
   const headers = new Headers(extraHeaders);
   headers.set('Content-Type', 'application/json; charset=utf-8');
   headers.set('Cache-Control', 'no-store');

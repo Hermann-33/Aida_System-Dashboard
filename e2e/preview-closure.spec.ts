@@ -99,8 +99,25 @@ test.describe('Preview closure gate (no backend)', () => {
 
   test('runtime network isolation across POS open-shift', async ({ page }) => {
     const hits: string[] = [];
+    await page.route('**/api/v1/catalogue', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        revision: 1,
+        categories: [
+          { id: 'coffee', slug: 'coffee', name: 'Coffee', imageUrl: null, sortOrder: 10, isActive: true, itemCount: 1 },
+        ],
+        items: [{
+          id: 'latte', categoryId: 'coffee', categoryName: 'Coffee', slug: 'latte', sku: 'LATTE', kind: 'product',
+          name: 'Latte', description: '', basePriceSen: 1050, isAvailable: true, isPublished: true,
+          isFeatured: false, isBestSeller: false, isStudentEligible: false, imageUrl: null, volumeMl: null,
+          prepRoute: 'bar', sortOrder: 10, compatibleAddOnIds: [], variants: [],
+        }],
+      }),
+    }));
     page.on('request', (req) => {
-      if (FORBIDDEN.test(req.url())) hits.push(req.url());
+      const isSharedCatalogue = new URL(req.url()).pathname === '/api/v1/catalogue';
+      if (FORBIDDEN.test(req.url()) && !isSharedCatalogue) hits.push(req.url());
     });
     await enrolPreview(page);
     await login(page, 'nadia');
