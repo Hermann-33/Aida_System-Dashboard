@@ -1,0 +1,9 @@
+/* The auth shell's soft radial+linear background — kept as a small custom
+   class rather than a Tailwind arbitrary value; a 3-layer gradient like
+   this is unreadable crammed into a className string. */
+.employee-auth-bg {
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(217, 138, 138, 0.22), transparent 50%),
+    radial-gradient(ellipse at 90% 20%, rgba(201, 154, 69, 0.18), transparent 45%),
+    linear-gradient(160deg, var(--aida-cream) 0%, var(--aida-latte) 100%);
+}

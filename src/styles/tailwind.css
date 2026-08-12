@@ -1,0 +1,66 @@
+@import 'tailwindcss';
+@plugin 'tailwindcss-animate';
+
+/*
+ * shadcn components (src/components/ui/**) are authored against a
+ * conventional set of semantic tokens (bg-primary, text-muted-foreground,
+ * border-input, etc.). Rather than introduce a second, unrelated color
+ * system, every one of those tokens below points at the existing Aida
+ * design tokens from ./tokens.css — so a shadcn component dropped in here
+ * renders in the real brand palette, not shadcn's defaults.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Brand fonts as Tailwind utilities (font-body/display/brand) — same
+     three faces tokens.css already declares, so Tailwind-styled screens
+     stay on the same type system as the CSS-class-based ones. */
+  --font-body: var(--aida-font-body);
+  --font-display: var(--aida-font-display);
+  --font-brand: var(--aida-font-brand);
+}
+
+:root {
+  --radius: var(--aida-radius);
+  --background: var(--aida-ivory);
+  --foreground: var(--aida-espresso);
+  --card: var(--aida-surface);
+  --card-foreground: var(--aida-espresso);
+  --popover: var(--aida-surface);
+  --popover-foreground: var(--aida-espresso);
+  --primary: var(--aida-burgundy);
+  --primary-foreground: var(--aida-surface);
+  --secondary: var(--aida-cream);
+  --secondary-foreground: var(--aida-espresso);
+  --muted: var(--aida-cream);
+  --muted-foreground: var(--aida-taupe);
+  --accent: var(--aida-blush);
+  --accent-foreground: var(--aida-burgundy);
+  --destructive: var(--aida-error);
+  --destructive-foreground: var(--aida-surface);
+  --border: var(--aida-outline);
+  --input: var(--aida-outline);
+  --ring: var(--aida-gold);
+}

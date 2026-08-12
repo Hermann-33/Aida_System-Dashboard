@@ -1,0 +1,199 @@
+/**
+ * Aida Signature design tokens — shared by Aida Counter (POS) and Aida Office (Admin).
+ * Aligned with the master UI prompt; Playfair + Plus Jakarta remain the brand fonts.
+ *
+ * Values are synced to the customer app's "v3 Rose" palette
+ * (apps/customer/lib/core/theme/aida_colors.dart, client direction 16 Jul 2026) —
+ * these had drifted onto an older palette from before that pivot. Token names
+ * are kept from the pre-v3 scheme so nothing here needs renaming, but the hex
+ * values are now the same colors the customer app actually renders.
+ */
+:root {
+  --aida-ivory: #fdf6f7;
+  --aida-cream: #f2cfd6;
+  --aida-surface: #ffffff;
+  --aida-espresso: #27121a;
+  --aida-burgundy: #c13a52;
+  --aida-rose: #af2626;
+  --aida-floral-pink: #de8d9d;
+  --aida-blush: #f7dee3;
+  --aida-gold: #c9a24e;
+  --aida-taupe: #976b77;
+  --aida-success: #4f6b4a;
+  --aida-warning: #b7782f;
+  --aida-error: #8c3a2e;
+  --aida-outline: #e8d5d0;
+  --aida-white: #ffffff;
+
+  /* Legacy aliases used by existing employee CSS */
+  --aida-latte: var(--aida-cream);
+  --aida-coffee: var(--aida-burgundy);
+  --aida-caramel: var(--aida-blush);
+  --aida-black: var(--aida-espresso);
+  --aida-pink: var(--aida-floral-pink);
+  --aida-soft-pink: var(--aida-blush);
+  --aida-light-grey: var(--aida-cream);
+  --aida-dark-grey: var(--aida-taupe);
+
+  --aida-shadow: 0 4px 20px rgba(44, 23, 27, 0.06);
+  --aida-shadow-lg: 0 12px 36px rgba(44, 23, 27, 0.1);
+  --aida-radius: 16px;
+  --aida-radius-sm: 10px;
+  --aida-radius-xs: 8px;
+  --aida-transition: 0.18s ease;
+  --aida-touch-min: 48px;
+
+  --aida-font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --aida-font-display: 'Playfair Display', Georgia, serif;
+  --aida-font-brand: 'Dancing Script', cursive;
+
+  --aida-space-1: 0.25rem;
+  --aida-space-2: 0.5rem;
+  --aida-space-3: 0.75rem;
+  --aida-space-4: 1rem;
+  --aida-space-5: 1.25rem;
+  --aida-space-6: 1.5rem;
+  --aida-space-8: 2rem;
+  --aida-space-10: 2.5rem;
+
+  --aida-rail-width: 5.5rem;
+  --aida-order-width: 22rem;
+  --aida-admin-sidebar: 16rem;
+  --aida-admin-rail: 4.5rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--aida-font-body);
+  background: var(--aida-ivory);
+  color: var(--aida-espresso);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--aida-font-display);
+  color: var(--aida-espresso);
+  margin: 0 0 var(--aida-space-3);
+}
+
+a {
+  color: var(--aida-burgundy);
+}
+
+:focus-visible {
+  outline: 3px solid var(--aida-gold);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.ui-preview-banner {
+  background: var(--aida-burgundy);
+  color: var(--aida-surface);
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.4rem 0.75rem;
+}
+
+.btn-primary,
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: var(--aida-touch-min);
+  min-width: var(--aida-touch-min);
+  border-radius: var(--aida-radius-sm);
+  border: none;
+  font-family: var(--aida-font-body);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.65rem 1.1rem;
+  white-space: nowrap;
+}
+
+/* Tailwind's preflight resets svg to display:block, which otherwise
+   pushes an inline icon onto its own line above the button label. */
+.btn-primary svg,
+.btn-secondary svg {
+  flex-shrink: 0;
+}
+
+.btn-primary {
+  background: var(--aida-rose);
+  color: var(--aida-surface);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--aida-burgundy);
+  border: 1.5px solid var(--aida-burgundy);
+}
+
+.form-error {
+  color: var(--aida-error);
+  font-weight: 600;
+}
+
+.form-hint {
+  color: var(--aida-taupe);
+  font-size: 0.875rem;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid var(--aida-outline);
+  background: var(--aida-surface);
+}
+
+.status-pill--ok {
+  color: var(--aida-success);
+  border-color: color-mix(in srgb, var(--aida-success) 40%, white);
+}
+
+.status-pill--warn {
+  color: var(--aida-warning);
+}
+
+.status-pill--err {
+  color: var(--aida-error);
+}
+
+.status-pill--info {
+  color: var(--aida-burgundy);
+  background: var(--aida-blush);
+}

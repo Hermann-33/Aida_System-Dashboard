@@ -1,0 +1,987 @@
+.admin-page {
+  max-width: 72rem;
+}
+
+/* The dashboard specifically should use whatever width the sidebar leaves
+   behind — collapsing it to the icon rail should let these cards reflow
+   into more columns, not just leave blank space up to the same 72rem cap
+   every other (text-heavy) admin page uses. */
+.admin-page[data-page='admin-dashboard'] {
+  max-width: none;
+}
+
+.admin-page h1 {
+  font-family: var(--aida-font-display, Georgia, serif);
+  font-size: 1.75rem;
+  color: var(--aida-burgundy);
+  margin: 0 0 var(--aida-space-2);
+}
+
+.admin-preview-note {
+  font-size: 0.8rem;
+  color: var(--aida-taupe);
+  margin: 0 0 var(--aida-space-2);
+  padding: var(--aida-space-2) var(--aida-space-3);
+  background: var(--aida-cream);
+  border-left: 3px solid var(--aida-rose);
+  border-radius: var(--aida-radius-xs);
+}
+
+.admin-section-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--aida-espresso);
+  margin: 0 0 var(--aida-space-3);
+}
+
+.admin-section-title--spaced {
+  margin-top: var(--aida-space-8);
+}
+
+.admin-period-toggle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--aida-space-2);
+  margin-bottom: var(--aida-space-4);
+}
+
+/* The bell trigger's own visual style now lives in AlertsPanel.tsx as
+   Tailwind utility classes (it's a shadcn/Radix component). This just
+   positions its wrapper at the end of the period-toggle row. */
+.admin-period-toggle__bell {
+  margin-left: auto;
+}
+
+.metric-grid--compact {
+  margin-bottom: var(--aida-space-6);
+}
+
+.admin-chart-table {
+  margin-top: var(--aida-space-4);
+  font-size: 0.8rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.live-ops-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--aida-space-4);
+}
+
+.live-ops-card {
+  background: var(--aida-surface);
+  border: 1px solid var(--aida-outline);
+  border-radius: var(--aida-radius-sm);
+  padding: var(--aida-space-4);
+}
+
+.live-ops-card__label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--aida-taupe);
+  margin: var(--aida-space-4) 0 var(--aida-space-2);
+}
+
+.live-ops-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--aida-space-2);
+  font-size: 0.9rem;
+}
+
+.live-ops-meta {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--aida-taupe);
+}
+
+.admin-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(44, 23, 27, 0.35);
+  border: none;
+  cursor: pointer;
+  z-index: 140;
+}
+
+.admin-dl {
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  gap: var(--aida-space-2);
+  margin: 0;
+}
+
+.admin-dl dt {
+  font-weight: 700;
+  color: var(--aida-taupe);
+}
+
+.admin-dl dd {
+  margin: 0;
+}
+
+.export-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--aida-space-3);
+}
+
+.export-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--aida-space-4);
+  padding: var(--aida-space-3) var(--aida-space-4);
+  background: var(--aida-surface);
+  border: 1px solid var(--aida-outline);
+  border-radius: var(--aida-radius-sm);
+}
+
+.org-card,
+.branch-card,
+.modifier-group-card {
+  background: var(--aida-surface);
+  border: 1px solid var(--aida-outline);
+  border-radius: var(--aida-radius-sm);
+  padding: var(--aida-space-4);
+  margin-bottom: var(--aida-space-4);
+}
+
+.branch-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--aida-space-3);
+}
+
+.branch-card__actions {
+  margin-top: var(--aida-space-3);
+}
+
+.branch-code {
+  font-size: 0.85rem;
+  color: var(--aida-taupe);
+  font-weight: 600;
+}
+
+.admin-alerts--inline {
+  background: transparent;
+  padding: 0;
+}
+
+.admin-page--split-inline {
+  display: grid;
+  grid-template-columns: 1fr min(18rem, 100%);
+  gap: var(--aida-space-8);
+}
+
+.admin-permissions-cell {
+  font-size: 0.8rem;
+  max-width: 14rem;
+}
+
+.admin-product-title {
+  font-family: var(--aida-font-display, Georgia, serif);
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 var(--aida-space-2);
+  color: var(--aida-burgundy);
+}
+
+
+.admin-page__header {
+  margin-bottom: var(--aida-space-6);
+}
+
+.admin-page__header--row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--aida-space-4);
+}
+
+.admin-page__header--row > *:first-child {
+  min-width: 0;
+}
+
+/* The action button/link must never stretch to fill the row — it's a
+   secondary control next to the title, not a full-width bar. */
+.admin-page__header--row > .btn-primary,
+.admin-page__header--row > .btn-secondary {
+  flex: none;
+  width: auto;
+  white-space: nowrap;
+}
+
+.admin-page--split {
+  display: grid;
+  grid-template-columns: 1fr min(18rem, 100%);
+  gap: var(--aida-space-8);
+}
+
+.metric-grid {
+  display: grid;
+  /* auto-fit, not auto-fill — auto-fill reserves empty trailing column
+     tracks when there are fewer cards than columns that would fit, which is
+     exactly what left a gap on the right instead of the cards stretching to
+     fill the row. auto-fit collapses those empty tracks so existing cards
+     grow to use the space. */
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--aida-space-4);
+  margin-bottom: var(--aida-space-8);
+}
+
+.metric-card {
+  position: relative;
+  overflow: hidden;
+  border: none;
+  border-radius: var(--aida-radius);
+  padding: var(--aida-space-6) var(--aida-space-5);
+  box-shadow: var(--aida-shadow);
+  transition: box-shadow var(--aida-transition), transform var(--aida-transition);
+  /* Every tone variant below sets `color` (the text/icon/blob color) and
+     `background` — everything else in this card reads off `currentColor`
+     so it adapts to whichever tone is active without repeating rules. */
+}
+
+.metric-card:hover {
+  box-shadow: var(--aida-shadow-lg);
+  transform: translateY(-2px);
+}
+
+/* Lighter tint backgrounds, not the full-strength solid tone — a solid
+   burgundy/success/etc. card read as too loud/saturated across a whole grid
+   of 9 of them. The tone still carries the card (label + value colored in
+   it), it's just a wash of the color rather than a block of it. Icon
+   badges below stay solid/vivid so the card doesn't go flat either. */
+.metric-card--brand {
+  background: color-mix(in srgb, var(--aida-burgundy) 12%, var(--aida-surface));
+  color: color-mix(in srgb, var(--aida-burgundy) 82%, var(--aida-espresso));
+}
+
+.metric-card--success {
+  background: color-mix(in srgb, var(--aida-success) 12%, var(--aida-surface));
+  color: color-mix(in srgb, var(--aida-success) 82%, var(--aida-espresso));
+}
+
+.metric-card--warning {
+  background: color-mix(in srgb, var(--aida-warning) 14%, var(--aida-surface));
+  color: color-mix(in srgb, var(--aida-warning) 80%, var(--aida-espresso));
+}
+
+.metric-card--error {
+  background: color-mix(in srgb, var(--aida-error) 12%, var(--aida-surface));
+  color: color-mix(in srgb, var(--aida-error) 82%, var(--aida-espresso));
+}
+
+.metric-card--gold {
+  background: color-mix(in srgb, var(--aida-gold) 16%, var(--aida-surface));
+  color: color-mix(in srgb, var(--aida-gold) 60%, var(--aida-espresso));
+}
+
+.metric-card--pink {
+  background: color-mix(in srgb, var(--aida-floral-pink) 20%, var(--aida-surface));
+  color: color-mix(in srgb, var(--aida-floral-pink) 55%, var(--aida-burgundy));
+}
+
+.metric-card__blob {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: inherit;
+  pointer-events: none;
+}
+
+.metric-card__top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--aida-space-2);
+  margin-bottom: var(--aida-space-3);
+}
+
+.metric-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--aida-burgundy);
+  color: var(--aida-surface);
+}
+
+.metric-card__icon--success {
+  background: var(--aida-success);
+  color: var(--aida-surface);
+}
+
+.metric-card__icon--warning {
+  background: var(--aida-warning);
+  color: var(--aida-surface);
+}
+
+.metric-card__icon--error {
+  background: var(--aida-error);
+  color: var(--aida-surface);
+}
+
+.metric-card__icon--gold {
+  background: var(--aida-gold);
+  color: var(--aida-espresso);
+}
+
+.metric-card__icon--pink {
+  background: var(--aida-floral-pink);
+  color: var(--aida-espresso);
+}
+
+.metric-card__label {
+  position: relative;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: inherit;
+  opacity: 0.85;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metric-card__value-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--aida-space-2);
+  margin: 0 0 var(--aida-space-4);
+}
+
+.metric-card__value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  margin: 0;
+  color: inherit;
+}
+
+.metric-card__trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 0.05rem 0.05rem;
+  border-radius: 999px;
+  border: 0.5px dashed color-mix(in srgb, currentColor 45%, transparent);
+  color: inherit;
+  opacity: 0.9;
+  cursor: help;
+}
+
+.metric-card__hint {
+  position: relative;
+  font-size: 0.75rem;
+  color: inherit;
+  opacity: 0.8;
+  margin: 0;
+  padding-top: var(--aida-space-3);
+  border-top: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.admin-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  gap: var(--aida-space-4);
+  margin-bottom: var(--aida-space-6);
+}
+
+.chart-card {
+  background: var(--aida-surface);
+  border: none;
+  border-radius: var(--aida-radius);
+  padding: var(--aida-space-5);
+  box-shadow: var(--aida-shadow);
+}
+
+.chart-card h3 {
+  font-size: 1rem;
+  margin-bottom: var(--aida-space-3);
+}
+
+.dashboard-hero {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--aida-space-4);
+  margin-bottom: var(--aida-space-6);
+}
+
+@media (max-width: 55rem) {
+  .dashboard-hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dashboard-hero__stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--aida-space-4);
+}
+
+@media (max-width: 30rem) {
+  .dashboard-hero__stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chart-card--hero {
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-card__hero-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--aida-taupe);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 var(--aida-space-1);
+}
+
+.chart-card__hero-value {
+  font-size: 2.1rem;
+  font-weight: 800;
+  color: var(--aida-espresso);
+  margin: 0;
+}
+
+.bar-chart,
+.line-chart,
+.area-chart {
+  width: 100%;
+  height: auto;
+}
+
+.area-chart__wrap {
+  position: relative;
+  cursor: crosshair;
+}
+
+.area-chart__tooltip {
+  position: absolute;
+  top: 0.5rem;
+  transform: translateX(-50%);
+  background: var(--aida-espresso);
+  color: var(--aida-surface);
+  padding: 0.4rem 0.65rem;
+  border-radius: var(--aida-radius-xs);
+  font-size: 0.75rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: var(--aida-shadow-lg);
+}
+
+.area-chart__tooltip strong {
+  font-size: 0.8rem;
+}
+
+.area-chart__tooltip span {
+  color: var(--aida-blush);
+  font-size: 0.7rem;
+}
+
+.area-chart__ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--aida-taupe);
+  margin-top: var(--aida-space-1);
+}
+
+.chart-card__insight {
+  margin: var(--aida-space-3) 0 0;
+  font-size: 0.85rem;
+  color: var(--aida-espresso);
+}
+
+.chart-card__insight strong {
+  color: var(--aida-burgundy);
+}
+
+.staff-leaderboard {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--aida-space-4);
+}
+
+.staff-leaderboard__row {
+  display: flex;
+  align-items: center;
+  gap: var(--aida-space-3);
+}
+
+.staff-leaderboard__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  color: var(--aida-surface);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.staff-leaderboard__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.staff-leaderboard__name-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--aida-space-2);
+  margin-bottom: var(--aida-space-1);
+}
+
+.staff-leaderboard__name {
+  font-weight: 700;
+  color: var(--aida-espresso);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--aida-space-2);
+}
+
+.staff-leaderboard__badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--aida-burgundy);
+  background: var(--aida-blush);
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+}
+
+.staff-leaderboard__amount {
+  font-weight: 700;
+  color: var(--aida-burgundy);
+  white-space: nowrap;
+}
+
+.staff-leaderboard__bar {
+  height: 0.4rem;
+  background: var(--aida-cream);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.staff-leaderboard__bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 900ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .staff-leaderboard__bar-fill {
+    transition: none;
+  }
+}
+
+.staff-leaderboard__meta {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--aida-taupe);
+  margin-top: var(--aida-space-1);
+}
+
+.gauge-chart {
+  text-align: center;
+}
+
+.gauge-chart__caption {
+  font-size: 0.8rem;
+  color: black;
+  margin: 0 0 var(--aida-space-2);
+}
+
+.gauge-chart__svg {
+  width: 100%;
+  height: auto;
+  max-width: 14rem;
+  display: block;
+  margin: 0 auto;
+}
+
+.gauge-chart__segment {
+  transition: d 900ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gauge-chart__segment {
+    transition: none;
+  }
+}
+
+.gauge-chart__legend {
+  list-style: none;
+  margin: var(--aida-space-2) 0 0;
+  padding: 0;
+  display: flex;
+  gap: var(--aida-space-4);
+  justify-content: center;
+}
+
+.gauge-chart__legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--aida-space-1);
+  font-size: 0.8rem;
+}
+
+.gauge-chart__swatch {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.gauge-chart__legend-label {
+  color: var(--aida-espresso);
+}
+
+.gauge-chart__legend-value {
+  font-weight: 700;
+  color: var(--aida-burgundy);
+}
+
+.point-compare {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--aida-space-3);
+}
+
+.point-compare li {
+  display: grid;
+  grid-template-columns: 6rem 1fr 5rem;
+  align-items: center;
+  gap: var(--aida-space-2);
+  font-size: 0.9rem;
+}
+
+.point-bar {
+  height: 0.5rem;
+  background: var(--aida-cream);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.point-bar__fill {
+  height: 100%;
+  background: var(--aida-burgundy);
+  border-radius: 999px;
+}
+
+.admin-alerts {
+  margin-bottom: var(--aida-space-6);
+}
+
+.admin-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--aida-space-4);
+  margin-bottom: var(--aida-space-4);
+}
+
+.admin-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aida-space-1);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.admin-filters input,
+.admin-filters select,
+.admin-form input,
+.admin-form textarea {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--aida-radius-xs);
+  border: 1px solid var(--aida-outline);
+  font: inherit;
+}
+
+.admin-table {
+  background: var(--aida-surface);
+  border-radius: var(--aida-radius-sm);
+  overflow: hidden;
+}
+
+.btn-sm {
+  min-height: 2rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.admin-row-actions {
+  display: flex;
+  gap: var(--aida-space-2);
+  flex-wrap: wrap;
+}
+
+.admin-pagination {
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--aida-space-4);
+}
+
+.admin-row-actions--spaced {
+  margin-bottom: var(--aida-space-4);
+}
+
+.enrol-code {
+  font-family: monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--aida-burgundy);
+}
+
+.admin-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(22rem, 100%);
+  height: 100%;
+  background: var(--aida-surface);
+  box-shadow: var(--aida-shadow-lg);
+  padding: var(--aida-space-6);
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  gap: var(--aida-space-4);
+}
+
+.admin-drawer__pending {
+  padding: var(--aida-space-4);
+  background: var(--aida-cream);
+  border-radius: var(--aida-radius-xs);
+}
+
+.admin-drawer__actions {
+  margin-top: auto;
+  display: flex;
+  gap: var(--aida-space-3);
+}
+
+.admin-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--aida-space-2);
+  font-weight: 600;
+}
+
+.admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aida-space-4);
+  max-width: 28rem;
+}
+
+.admin-form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aida-space-2);
+  font-weight: 600;
+}
+
+.mobile-preview__frame {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  max-height: 24rem;
+  border: 3px solid var(--aida-espresso);
+  border-radius: 1.5rem;
+  background: var(--aida-ivory);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-preview__status {
+  height: 1.5rem;
+  background: var(--aida-espresso);
+}
+
+.mobile-preview__banner {
+  background: linear-gradient(135deg, var(--aida-burgundy), var(--aida-rose));
+  color: var(--aida-surface);
+  padding: var(--aida-space-4);
+}
+
+.mobile-preview__banner--inactive {
+  opacity: 0.45;
+}
+
+.mobile-preview__banner p {
+  margin: var(--aida-space-2) 0 0;
+  font-size: 0.85rem;
+}
+
+.mobile-preview__content {
+  flex: 1;
+  background: repeating-linear-gradient(0deg,
+      var(--aida-outline),
+      var(--aida-outline) 1px,
+      transparent 1px,
+      transparent 2.5rem);
+}
+
+.integration-card {
+  background: var(--aida-surface);
+  border: 1px solid var(--aida-outline);
+  border-radius: var(--aida-radius-sm);
+  padding: var(--aida-space-6);
+  max-width: 32rem;
+}
+
+.integration-card header {
+  display: flex;
+  align-items: center;
+  gap: var(--aida-space-3);
+  margin-bottom: var(--aida-space-3);
+}
+
+.admin-placeholder {
+  background: var(--aida-cream);
+  border-radius: var(--aida-radius-sm);
+  padding: var(--aida-space-8);
+  text-align: center;
+}
+
+.admin-logout {
+  margin-top: var(--aida-space-4);
+}
+
+.variance-neg {
+  color: var(--aida-error);
+  font-weight: 700;
+}
+
+.variance-pos {
+  color: var(--aida-success);
+  font-weight: 700;
+}
+
+.empty-state {
+  text-align: center;
+  padding: var(--aida-space-8);
+  color: var(--aida-taupe);
+}
+
+.empty-state h3 {
+  margin-bottom: var(--aida-space-2);
+}
+
+.confirm-dialog {
+  width: min(24rem, 100%);
+  background: var(--aida-surface);
+  border-radius: var(--aida-radius);
+  padding: var(--aida-space-6);
+  box-shadow: var(--aida-shadow-lg);
+}
+
+.confirm-dialog__actions {
+  display: flex;
+  gap: var(--aida-space-3);
+  justify-content: flex-end;
+  margin-top: var(--aida-space-4);
+}
+
+.confirm-dialog--wide {
+  width: min(30rem, 100%);
+  max-height: min(90vh, 640px);
+  overflow-y: auto;
+}
+
+/* Stand-in for a real product photo — no catalogue photo API yet, so a
+   tone swatch with a category glyph reads as "photo will go here" rather
+   than faking one. Same tone values the POS product cards already use. */
+.menu-item-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--aida-radius-sm);
+  color: var(--aida-surface);
+  flex-shrink: 0;
+}
+
+.menu-item-thumb--photo {
+  object-fit: cover;
+  background: var(--aida-cream);
+}
+
+.menu-item-thumb-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--aida-space-2);
+  margin-top: var(--aida-space-2);
+}
+
+.menu-item-thumb-picker__swatch {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--aida-radius-xs);
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.menu-item-thumb-picker__swatch--active {
+  border-color: var(--aida-espresso);
+  box-shadow: 0 0 0 2px var(--aida-surface) inset;
+}
+
+.pos-context-bar__product {
+  font-weight: 700;
+}
+
+.pos-context-bar__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
