@@ -1,67 +1,114 @@
-import { useState } from 'react';
-import { FIXTURE_TODAY, PREVIEW_MEMBERS, PREVIEW_REWARD_RULES, PREVIEW_TRANSACTIONS } from '../../preview/fixtures/catalog';
+import { useEffect, useMemo, useState } from 'react';
+import { FIXTURE_TODAY, PREVIEW_REWARD_RULES, PREVIEW_TRANSACTIONS } from '../../preview/fixtures/catalog';
 import { MetricCard } from '../../shared/components/MetricCard';
 import { formatRmFromSen } from '../../shared/formatting/money';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdminPageShell } from './AdminPageShell';
+import { fetchAdminMembers, type AdminMember } from './memberDirectory';
 import './admin.css';
 
 type Tab = 'members' | 'rewards';
 
-/** Members report and Rewards report used to be two separate pages —
- * they're both slices of the same loyalty data (who's a member, what
- * rewards got used), so they're tabs of one page now. */
 export function AdminMembersLoyaltyReportPage() {
   const [tab, setTab] = useState<Tab>('members');
-  const active = PREVIEW_MEMBERS.filter((m) => m.active);
-  const guestOrders = 9;
-  const memberOrders = 4;
-  const discountRows = PREVIEW_TRANSACTIONS.filter((t) => t.discountSen > 0);
+  const [members, setMembers] = useState<AdminMember[]>([]);
+  const [membersLoading, setMembersLoading] = useState(true);
+  const [membersError, setMembersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMembers() {
+      setMembersLoading(true);
+      setMembersError(null);
+      try {
+        const result = await fetchAdminMembers();
+        if (!cancelled) setMembers(result);
+      } catch (error) {
+        if (!cancelled) {
+          setMembers([]);
+          setMembersError(
+            error instanceof Error ? error.message : 'Unable to load members.',
+          );
+        }
+      } finally {
+        if (!cancelled) setMembersLoading(false);
+      }
+    }
+
+    void loadMembers();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const activeCount = useMemo(
+    () => members.filter((member) => member.isActive).length,
+    [members],
+  );
+  const pendingStudentCount = useMemo(
+    () => members.filter((member) => member.studentStatus === 'pending').length,
+    [members],
+  );
+  const discountRows = PREVIEW_TRANSACTIONS.filter((transaction) => transaction.discountSen > 0);
 
   return (
-    <AdminPageShell pageId="admin-members-loyalty-report" title="Members &amp; Loyalty" hint="Sample transaction and member fixtures.">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
+    <AdminPageShell
+      pageId="admin-members-loyalty-report"
+      title="Members &amp; Loyalty"
+      hint="Member identities come from the trusted backend. Rewards activity remains preview-only until the loyalty integration task."
+    >
+      <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
         <TabsList>
           <TabsTrigger value="members">Members</TabsTrigger>
           <TabsTrigger value="rewards">Rewards activity</TabsTrigger>
         </TabsList>
 
         <TabsContent value="members">
-          <p className="form-hint">Member vs guest mix from preview transaction sample.</p>
+          <p className="form-hint">
+            Server-issued member identities. No points, stamps, roles, or verification outcomes are fabricated in this view.
+          </p>
+
           <div className="metric-grid metric-grid--compact">
-            <MetricCard label="Active members" value={String(active.length)} />
-            <MetricCard label="Member orders (sample)" value={String(memberOrders)} />
-            <MetricCard label="Guest orders (sample)" value={String(guestOrders)} />
+            <MetricCard label="Total members" value={membersLoading ? '—' : String(members.length)} />
+            <MetricCard label="Active members" value={membersLoading ? '—' : String(activeCount)} />
+            <MetricCard label="Student verification pending" value={membersLoading ? '—' : String(pendingStudentCount)} />
           </div>
 
-          <table className="data-table admin-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Code</th>
-                <th>Kind</th>
-                <th>Points</th>
-                <th>Stamps</th>
-                <th>Student status</th>
-                <th>Active</th>
-              </tr>
-            </thead>
-            <tbody>
-              {PREVIEW_MEMBERS.map((m) => (
-                <tr key={m.id}>
-                  <td>{m.displayName}</td>
-                  <td>{m.memberCode}</td>
-                  <td>{m.kind}</td>
-                  <td>{m.points}</td>
-                  <td>
-                    {m.stamps}/{m.stampGoal}
-                  </td>
-                  <td>{m.studentVerification}</td>
-                  <td>{m.active ? 'Yes' : 'No'}</td>
+          {membersLoading ? (
+            <p className="form-hint">Loading members…</p>
+          ) : membersError ? (
+            <p className="form-hint" role="alert">{membersError}</p>
+          ) : members.length === 0 ? (
+            <p className="form-hint">No members have signed up yet.</p>
+          ) : (
+            <table className="data-table admin-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Code</th>
+                  <th>Type</th>
+                  <th>Student status</th>
+                  <th>Active</th>
+                  <th>Joined</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {members.map((member) => (
+                  <tr key={member.memberId}>
+                    <td>{member.displayName ?? '—'}</td>
+                    <td>{member.email}</td>
+                    <td>{member.memberCode}</td>
+                    <td>{member.memberType}</td>
+                    <td>{member.studentStatus}</td>
+                    <td>{member.isActive ? 'Yes' : 'No'}</td>
+                    <td>{formatMemberDate(member.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </TabsContent>
 
         <TabsContent value="rewards">
@@ -83,12 +130,12 @@ export function AdminMembersLoyaltyReportPage() {
               </tr>
             </thead>
             <tbody>
-              {discountRows.map((t) => (
-                <tr key={t.order}>
-                  <td>{t.order}</td>
-                  <td>{t.member ?? '—'}</td>
-                  <td>{formatRmFromSen(t.discountSen)}</td>
-                  <td>{formatRmFromSen(t.totalSen)}</td>
+              {discountRows.map((transaction) => (
+                <tr key={transaction.order}>
+                  <td>{transaction.order}</td>
+                  <td>{transaction.member ?? '—'}</td>
+                  <td>{formatRmFromSen(transaction.discountSen)}</td>
+                  <td>{formatRmFromSen(transaction.totalSen)}</td>
                 </tr>
               ))}
             </tbody>
@@ -97,4 +144,10 @@ export function AdminMembersLoyaltyReportPage() {
       </Tabs>
     </AdminPageShell>
   );
+}
+
+function formatMemberDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return new Intl.DateTimeFormat('en-MY', { dateStyle: 'medium' }).format(parsed);
 }
