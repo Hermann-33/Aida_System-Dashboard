@@ -12,7 +12,7 @@ import { IdleLockModal } from '../components/IdleLockModal';
 
 interface ProtectedRouteProps {
   product: ProductScope;
-  /** When true, allow anonymous access (employee welcome / enrol). */
+  /** When true, allow anonymous access (employee/admin login surfaces). */
   allowAnonymous?: boolean;
 }
 
@@ -51,7 +51,8 @@ export function ProtectedRoute({ product, allowAnonymous = false }: ProtectedRou
       );
     }
     if (session.status !== 'authenticated' || !session.identity) {
-      return <Navigate to="/employee" replace state={{ from: location.pathname }} />;
+      const loginPath = product === 'admin' ? '/admin/login' : '/employee';
+      return <Navigate to={loginPath} replace state={{ from: location.pathname }} />;
     }
     if (!canAccessProduct(session.identity, product)) {
       return <Navigate to="/unauthorized" replace />;
