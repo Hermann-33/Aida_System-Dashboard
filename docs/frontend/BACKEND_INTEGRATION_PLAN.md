@@ -1,10 +1,10 @@
 # Customer Backend Integration Plan
 
-Updated: 2026-08-12
+Updated: 2026-08-13
 
 ## Auth/member
 
-Supabase Auth and owner-scoped member/profile source exist on the auth stack; final validation remains deferred.
+Supabase Auth and owner-scoped member/profile source exist on the auth stack. Dashboard deployment now exists, but deployed Auth/member validation remains deferred until Vercel runtime variables and approved identities are supplied. The customer repository/device side owns the eventual Flutter observation; dashboard documentation must record the exact revision and reversible mutation evidence without claiming that observation itself.
 
 ## Catalogue — implemented source/data
 

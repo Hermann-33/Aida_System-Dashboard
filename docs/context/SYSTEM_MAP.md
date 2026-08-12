@@ -1,6 +1,6 @@
 # System Map
 
-Updated: 2026-08-12
+Updated: 2026-08-13
 
 | System | Runtime | Current trusted source |
 |---|---|---|
@@ -25,3 +25,7 @@ Admin Menu
 The production customer menu contains no hardcoded catalogue fallback. Initial live seed is the 16 entries formerly hardcoded in the customer app.
 
 POS transaction/checkout preview data is not catalogue authority and remains outside TASK-MENU-001.
+
+## Deployment state
+
+The dashboard Vercel project now exists and the source builds there. Its BFF is not operational until the project receives `AIDA_SUPABASE_URL` and `AIDA_SUPABASE_PUBLISHABLE_KEY` as runtime environment variables. These are publishable client/BFF inputs; a service-role key remains prohibited from Vite/browser code.

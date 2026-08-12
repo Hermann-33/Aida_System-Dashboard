@@ -1,5 +1,17 @@
 # Audit Log
 
+## 2026-08-13 — TASK-AUTH-003 deployment boundary
+
+**Verdict:** PARTIAL under ADR-0004.
+
+Created Vercel project `aida-system-dashboard` (`prj_lOHi9DTbwLYRZRlBBrrnmfRTRfIn`) and produced clean application deployment `dpl_FUniG8DnSkkKWJvhNjPNBWkdpT8W` (`READY`). The deployed BFF returned 502 for `/api/v1/catalogue`; a temporary diagnostic deployment confirmed `AIDA_SUPABASE_URL` and `AIDA_SUPABASE_PUBLISHABLE_KEY` were absent at runtime, then was superseded by the clean application deployment. Supplying values in a deployment payload did not configure project environment settings, and the connected deployment boundary exposes no environment-setting operation.
+
+Stopped at the required operator boundary. No credentials were manufactured, no public bootstrap or role self-assignment was added, and no service-role key was requested or shipped. Live Supabase remains at zero Auth users/profiles/members/admins/staff and catalogue revision 1 (4 categories, 16 items, 27 variants, 27 add-on links). No Auth, schema or catalogue mutation occurred, so there was nothing to clean up.
+
+Local validation: `npm ci` passed after stopping the local Vite process that held a native dependency file open; lint passed with two existing Fast Refresh warnings; strict typecheck passed; 19 Vitest files / 85 tests passed; 6 no-backend preview Playwright tests passed; production build and legacy-token assertion passed with the existing bundle-size warning; `git diff --check` passed with line-ending notices only. The local development server was restarted on port 5174. `npm audit` reported 5 dependency findings (1 moderate, 4 high); no automatic or out-of-scope package upgrade was applied.
+
+Supabase security advisor was re-run with 0 lints. Performance advisor reported six expected unused-index INFO observations. No backend/security-relevant change was made.
+
 ## 2026-08-13 — AUTH-002 / TASK-MENU-001 dashboard validation
 
 **Verdict:** PARTIAL under ADR-0004.

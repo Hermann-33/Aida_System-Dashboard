@@ -17,6 +17,9 @@ Updated: 2026-08-13
 
 ## Dashboard
 
+- `server/config.ts` — server-only loader for `AIDA_SUPABASE_URL` and the publishable key; rejects missing configuration without exposing values.
+- `server/authBff.ts` / `server/employeeSession.ts` — same-origin employee Auth BFF and HttpOnly cookie session contract.
+- `api/v1/auth/*` / `api/v1/admin/members.ts` — Vercel function adapters for login/session/refresh/logout and Admin Members.
 - `server/catalogueBff.ts` — public/admin catalogue handlers using publishable key or validated caller JWT.
 - `api/v1/catalogue.ts` and `api/v1/admin/catalogue*` — deployment adapters.
 - `src/features/catalogue/catalogueClient.ts` — browser contracts.
@@ -27,3 +30,9 @@ Updated: 2026-08-13
 - `AdminMenuFlows.test.tsx`, `posCatalogue.test.ts`, `CounterWorkspace.test.tsx` — Admin payload and POS shared-catalogue coverage.
 
 POS order, total, checkout and payment preview remain separate from catalogue authority.
+
+## Deployment
+
+- Vercel project `aida-system-dashboard` builds the Vite client and eight Node functions from the existing adapters.
+- Runtime requires project-scoped `AIDA_SUPABASE_URL` and `AIDA_SUPABASE_PUBLISHABLE_KEY`; neither belongs in the Vite bundle.
+- TASK-AUTH-003 clean preview deployment is built but the BFF is blocked until an operator configures those project variables.

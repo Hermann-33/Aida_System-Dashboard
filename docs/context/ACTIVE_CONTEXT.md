@@ -1,7 +1,7 @@
 # Active Context
 
 **As of:** 2026-08-13
-**Current implementation task:** `TASK-MENU-001 — shared catalogue/menu persistence and dual-client integration`
+**Current implementation task:** `TASK-AUTH-003 — dashboard deployment, approved identity bootstrap, and deployed Auth/Menu E2E`
 **Current task verdict:** PARTIAL
 
 ## Current product reality
@@ -25,10 +25,14 @@ Live Supabase catalogue regression passes transactionally. Security advisor is 0
 
 POS cart/order/payment transaction state and its checkout-specific preview wiring are not made authoritative by this menu task. Trusted quote/order pricing remains a separate backend task.
 
-## Deferred validation debt
+## TASK-AUTH-003 deployment attempt
 
-Dashboard `npm ci`, lint, strict typecheck, 85 Vitest tests, 6 preview Playwright tests and production build now pass. A local BFF configured with the real publishable key read revision 1 (4 categories, 16 published items, 27 variants) from Supabase; anonymous Admin Catalogue/Admin Members access and cross-origin mutation were rejected. The live project has zero Auth users/admins/staff/members and no linked AIDA Vercel project, so real admin writes, Auth E2E, deployed E2E and Flutter refresh evidence remain blocked. ADR-0004 therefore keeps the formal verdict `PARTIAL`.
+Vercel project `aida-system-dashboard` (`prj_lOHi9DTbwLYRZRlBBrrnmfRTRfIn`) now exists in team `hermann-33s-projects`. Clean application deployment `dpl_FUniG8DnSkkKWJvhNjPNBWkdpT8W` built successfully, but `/api/v1/catalogue` returns 502 because the connected deployment boundary cannot configure project environment variables. A temporary diagnostic deployment proved `AIDA_SUPABASE_URL` and `AIDA_SUPABASE_PUBLISHABLE_KEY` are absent at runtime; it was superseded by the clean application deployment. No service-role key was requested, exposed or shipped.
+
+The live Supabase baseline remains unchanged: zero Auth users/profiles/members/admins/staff; catalogue revision 1 with 4 categories, 16 items, 27 variants and 27 add-on links. Identity creation and all catalogue mutations were deliberately skipped rather than manufacturing credentials or leaving partial test data. Deployed Auth/Menu E2E and negative-role browser evidence therefore remain open, so ADR-0004 keeps the verdict `PARTIAL`.
+
+Dashboard `npm ci`, lint, strict typecheck, 19 Vitest files / 85 tests, 6 preview Playwright tests, production build and `git diff --check` pass. Lint retains two pre-existing Fast Refresh warnings; build retains the existing chunk-size warning. `npm audit` reports 5 known dependency findings (1 moderate, 4 high); package upgrades were not mixed into this deployment/E2E boundary task.
 
 ## Next product task
 
-First close `TASK-AUTH-003 — dashboard deployment, identity bootstrap and Auth/Menu cross-client E2E`; then proceed to `TASK-ORDER-001 — authoritative quote/cart/order foundation`.
+An operator must configure the two publishable Supabase variables in Vercel Preview (and Production if promoted), redeploy, and provide approved test identities through a secure channel or create them through Supabase Auth administration. Then resume this same task for deployed Auth/Menu/role E2E and reversible cleanup. Do not start `TASK-ORDER-001` until these gates close.

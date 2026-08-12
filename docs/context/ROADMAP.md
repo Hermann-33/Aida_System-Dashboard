@@ -25,4 +25,4 @@ Dashboard install/lint/typecheck/85 Vitest tests/6 preview Playwright tests/buil
 
 ## Next product phase
 
-`TASK-AUTH-003 — dashboard deployment, identity bootstrap and Auth/Menu cross-client E2E` must close the remaining ADR-0004 gates. Then `TASK-ORDER-001` should establish server-owned pricing validation, quote/order IDs, idempotency and legal order transitions.
+`TASK-AUTH-003 — dashboard deployment, approved identity bootstrap, and deployed Auth/Menu E2E` is in progress. The Vercel project exists and a source deployment builds, but its runtime lacks the required publishable Supabase environment variables and no approved test identities exist. After an operator configures the project and identities, resume deployed Auth/Menu/negative-role E2E and cleanup. Only then should `TASK-ORDER-001` establish server-owned pricing validation, quote/order IDs, idempotency and legal order transitions.

@@ -20,4 +20,6 @@ Updated: 2026-08-13
 
 ## Remaining release gates
 
-Dashboard install/lint/typecheck/tests/build pass. Deployed cross-client E2E remains open because no AIDA dashboard Vercel project or real Auth/admin/staff/member identities exist. Quote/order/payment authority is not implemented; local cart totals cannot be trusted for payment/order persistence.
+Dashboard install/lint/typecheck/tests/build pass. A dedicated AIDA dashboard Vercel project and successful source build now exist, but its runtime has neither required publishable Supabase environment variable. The automation boundary cannot mutate Vercel project environment settings, and no approved Auth/admin/staff/member identities exist. No public bootstrap endpoint, self-assigned role, RLS weakening, direct Auth-table write or service-role browser secret was introduced. Deployed Auth/Menu and negative-role E2E remain open. Quote/order/payment authority is not implemented; local cart totals cannot be trusted for payment/order persistence.
+
+Supabase security advisor remains at 0 lints. `npm audit` currently reports 5 dependency findings (1 moderate, 4 high), including a direct `react-router-dom` advisory and transitive `nanoid`, `postcss` and `undici` advisories. They require a separately reviewed lockfile/package update; this bounded deployment task did not apply automatic upgrades.

@@ -1,6 +1,6 @@
 # Supabase Status
 
-**Status date:** 2026-08-12
+**Status date:** 2026-08-13
 **Project:** Aida System
 **Ref:** `eswovqxqzfevcdwwcmuh`
 **Region:** `ap-southeast-1`
@@ -32,3 +32,9 @@ Seed: 4 categories, 16 items, 27 variants, 27 compatible add-on links. Only `cat
 Canonical catalogue SQL regression passed live in a rolled-back transaction: public read, admin create/update, revision advance, audit evidence, customer mutation denial and unpublished-item hiding.
 
 Security advisor: **0 lints**. Performance advisor: only unused-index INFO on the new no-traffic schema.
+
+## TASK-AUTH-003 live baseline
+
+Read-only validation found zero Auth users, profiles, members, admins/owners and staff. Catalogue revision remains 1 with 4 categories, 16 items, 27 variants and 27 compatible add-on links. TASK-AUTH-003 made no schema, Auth or catalogue-data changes because deployment configuration and approved identity credentials are still unavailable.
+
+Security advisor was re-run and returned 0 lints. Performance advisor returned six unused-index INFO observations only; no backend change was made in response.
