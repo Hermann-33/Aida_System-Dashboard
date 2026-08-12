@@ -13,6 +13,15 @@ import {
   handleEmployeeSession,
   type EmployeeBffDependencies,
 } from './employeeBff.js';
+import {
+  handleAdminSaveOrderingPolicy,
+  handleEmployeeOrder,
+  handleEmployeeOrders,
+  handleEmployeePlaceOrder,
+  handleEmployeeQuoteOrder,
+  handleEmployeeTransitionOrder,
+  handleOrderingPolicy,
+} from './orderBff.js';
 
 type Handler = (
   request: Request,
@@ -30,6 +39,13 @@ const handlers = new Map<string, Handler>([
   ['/api/v1/admin/catalogue', handleAdminCatalogue],
   ['/api/v1/admin/catalogue/category', handleAdminSaveCategory],
   ['/api/v1/admin/catalogue/item', handleAdminSaveItem],
+  ['/api/v1/orders/policy', handleOrderingPolicy],
+  ['/api/v1/orders', handleEmployeeOrders],
+  ['/api/v1/orders/detail', handleEmployeeOrder],
+  ['/api/v1/orders/quote', handleEmployeeQuoteOrder],
+  ['/api/v1/orders/place', handleEmployeePlaceOrder],
+  ['/api/v1/orders/status', handleEmployeeTransitionOrder],
+  ['/api/v1/admin/orders/policy', handleAdminSaveOrderingPolicy],
 ]);
 
 function requestUrl(request: IncomingMessage): string {
@@ -101,8 +117,9 @@ function mount(server: ConnectServer, env: Record<string, string | undefined>) {
 }
 
 /**
- * Serves employee/admin and catalogue BFF handlers during Vite dev/preview.
- * Production serverless deployments use the same root `/api` handlers.
+ * Serves employee/admin, catalogue, and ordering BFF handlers during Vite
+ * dev/preview. Production serverless deployments use the same root `/api`
+ * handlers.
  */
 export function aidaBffPlugin(env: Record<string, string | undefined>): Plugin {
   return {
