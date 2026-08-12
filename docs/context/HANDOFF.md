@@ -4,55 +4,180 @@ Updated: 2026-08-13
 
 ## Current task
 
-`TASK-AUTH-003 — dashboard deployment, approved identity bootstrap, and deployed Auth/Menu E2E`
+`TASK-DEMO-ORDER-001 — live ordering, scheduled pickup, POS queue, and Realtime fulfilment`
 
-**Verdict:** PARTIAL because the Vercel project exists and builds, but runtime environment configuration and approved identities require operator action.
+**Overall verdict:** PARTIAL under ADR-0004 because the shared backend is implemented/validated but the Flutter and React integrations are intentionally left for the next Codex frontend pass.
 
-Dashboard branch: `codex/task-auth-003-deployed-e2e`, stacked on `codex/task-menu-001-shared-catalogue` at `238e0ff211fe550f42ec4d4423724e3642282295`. Customer validation commit remains `7c7d91c2e3cf07e319dce1881c1322525881584f`; this task did not modify that repository.
+Shared branch in both repositories:
 
-## Implemented
+`codex/task-demo-order-001-order-scheduling-backend`
 
-- Live Supabase catalogue with forced RLS, audit evidence and Realtime revision signal.
-- Seeded the exact 16 customer menu items that were previously hardcoded, including original prices/availability/images/flags.
-- Moved Small/Medium/Large deltas into 27 per-item variant rows and drink add-on compatibility into 27 normalized links.
-- Customer `CatalogueRepository` reads `get_catalogue()`; no production mock fallback exists.
-- Flutter watches `catalogue_revision` and re-fetches after Admin writes.
-- Admin Menu list/category creation/item editor now read/write shared DB data through BFF caller-JWT RPCs.
-- POS sale browsing/configuration consumes shared categories, products, availability, publication, base prices, per-item variants and compatible add-ons; it does not fall back to `PREVIEW_MENU`.
-- Old customer runtime menu constants and `ItemSize` enum removed.
-- Fake rating/bonus-points catalogue presentation removed rather than persisted.
-- Dashboard `npm ci`, lint, typecheck, 85 Vitest tests, 6 preview Playwright tests and build pass.
-- A live local BFF read revision 1 with 4 categories, 16 published items and 27 variants; anonymous Admin endpoints, cross-origin mutation and a simulated authenticated non-admin catalogue mutation were rejected.
+The branch is stacked on each repository's `codex/task-auth-003-deployed-e2e` branch. Do not alter default branches or merge this stack out of order.
 
-## Deployment evidence
+## Backend implemented
 
-- Vercel project: `aida-system-dashboard` / `prj_lOHi9DTbwLYRZRlBBrrnmfRTRfIn`.
-- Current clean application deployment: `dpl_FUniG8DnSkkKWJvhNjPNBWkdpT8W` (`READY`).
-- Runtime request: `/api/v1/catalogue` returned 502.
-- A temporary diagnostic deployment reported both required environment variables absent and was then superseded by the clean application deployment.
-- Attempting to pass environment values in deployment payloads did not configure the project; the available connector has no project-environment mutation operation.
-- No browser/service-role secret was used. No identity or catalogue data was changed.
+### Supabase
 
-## Exact operator handoff
+Live project: `eswovqxqzfevcdwwcmuh`.
 
-1. Open `https://vercel.com/hermann-33s-projects/aida-system-dashboard/settings/environment-variables`.
-2. Add `AIDA_SUPABASE_URL=https://eswovqxqzfevcdwwcmuh.supabase.co` and the active `AIDA_SUPABASE_PUBLISHABLE_KEY` to Preview; add them to Production only if production promotion is intended.
-3. Redeploy the task branch. Allow test-browser access to the protected preview (share/bypass access or an approved protection setting).
-4. Supply approved customer/admin/staff test emails and operator-owned passwords via a secure channel, or create confirmed users through Supabase Auth administration. Promote admin/staff only through the trusted operator/database boundary; never expose public role self-assignment.
-5. Resume TASK-AUTH-003 to run Auth E2E, member-directory/disabled-employee gates, Menu edit/revision/Flutter refresh tests, negative authorization tests, and cleanup.
+Canonical customer-repo migrations:
 
-## Remaining gates
+- `20260812182212_create_authoritative_orders_and_scheduling.sql`
+- `20260812183029_index_order_foreign_keys.sql`
 
-- Deployed Admin edit -> revision -> customer Flutter refresh E2E.
-- Auth signup -> provisioning -> real Admin Members E2E.
-- Live availability/publication/temp-item/variant/add-on mutation and cleanup evidence.
-- Supabase still has zero Auth users/admins/staff/members.
-- Runtime Vercel environment configuration and approved test identities are unavailable to this automation boundary.
+They create and secure:
 
-## Non-goal retained
+- `order_schedule_settings`
+- `orders`
+- `order_lines`
+- `order_line_addons`
+- `order_events`
 
-Dashboard POS cart/order/totals/payment still use preview/local transaction state. Shared catalogue display does not make those values trusted.
+Public order RPCs:
 
-## Next product task
+- `get_ordering_policy()`
+- `quote_order(jsonb)`
+- `place_customer_order(jsonb)`
+- `place_pos_order(jsonb)`
+- `get_order(uuid)`
+- `get_my_orders(integer)`
+- `list_orders(text[], integer)`
+- `transition_order_status(uuid,text,bigint,text)`
+- `save_ordering_policy(jsonb)`
 
-Resume `TASK-AUTH-003` at the operator handoff above. After all ADR-0004 gates pass, the next product task is `TASK-ORDER-001 — authoritative quote/cart/order foundation`.
+Clients submit IDs/quantities/notes/fulfilment intent only. The backend validates the current shared catalogue and owns price, totals, order IDs/numbers, trusted identity, status and schedule acceptance. Historical line/add-on commercial data is persisted as immutable snapshots.
+
+Placement requires a `clientRequestId` UUID. Identical retries return the same order; using the same key for different content fails.
+
+### Scheduling
+
+Current server policy:
+
+- timezone `Asia/Kuala_Lumpur`
+- enabled
+- minimum lead 15 minutes
+- slot interval 15 minutes
+- maximum advance 7 days
+
+Branch-hours/closures/capacity are not yet authoritative and therefore are not enforced or claimed by this task.
+
+### Fulfilment / Realtime
+
+Statuses:
+
+`confirmed`, `scheduled`, `preparing`, `ready`, `completed`, `cancelled`.
+
+Legal staff transitions:
+
+```text
+confirmed -> preparing | cancelled
+scheduled -> preparing | cancelled
+preparing -> ready | cancelled
+ready -> completed
+```
+
+Transitions use expected `statusVersion` concurrency and append `order_events` evidence.
+
+`orders` is published to Supabase Realtime alongside the existing `catalogue_revision`. Clients re-fetch an authorized full snapshot after an order-header change.
+
+### Dashboard server/BFF
+
+No React UI was changed.
+
+New server endpoints:
+
+- `GET /api/v1/orders/policy`
+- `GET /api/v1/orders`
+- `GET /api/v1/orders/detail?id=<uuid>`
+- `POST /api/v1/orders/quote`
+- `POST /api/v1/orders/place`
+- `POST /api/v1/orders/status`
+- `POST /api/v1/admin/orders/policy`
+
+Privileged calls use the existing HttpOnly employee session, same-origin POSTs, the publishable Supabase project key, and the caller JWT. No service-role credential or employee token is exposed to browser JavaScript.
+
+## Backend validation evidence
+
+Canonical `supabase/tests/order_integration.sql` passed transactionally against the live project.
+
+Proved:
+
+- forged client price/total values are ignored;
+- `2 × Salted Caramel Latte / Medium / Oat Milk` resolves from live catalogue truth to 3080 sen;
+- incompatible add-ons and invalid past schedules fail;
+- customer scheduled placement persists trusted immutable snapshots;
+- same `clientRequestId` retry does not duplicate;
+- changed payload with reused idempotency key fails;
+- customer history is owner-scoped;
+- customer direct order DML and status transition fail;
+- staff sees queue and can create a guest POS order;
+- `scheduled -> preparing -> ready -> completed` works;
+- stale status versions and illegal terminal transitions fail;
+- staff cannot update scheduling policy; admin can;
+- regression rollback leaves zero synthetic identities/orders/events.
+
+Supabase security advisor: **0 lints**.
+
+Performance advisor: only `unused_index` INFO after a forward migration added all missing foreign-key covering indexes.
+
+Dashboard `server/orderBff.ts` passes isolated strict TypeScript 5.8.3 compilation under the repository server compiler rules. `server/orderBff.test.ts` adds contract coverage for publishable-key public policy reads, staff caller-JWT queue/quote/place, same-origin rejection, optimistic-conflict mapping, and admin-only policy writes.
+
+## Frontend work remaining
+
+### Customer Flutter
+
+Replace the current local/mock order authority with ADR-0010:
+
+- call the authoritative quote before placement;
+- add ASAP / Schedule for later checkout UX from `get_ordering_policy()`;
+- generate/reuse a placement `clientRequestId` correctly;
+- call `place_customer_order()`;
+- replace random local order numbers and local-only `PastOrder` authority with backend snapshots/history;
+- replace the timer-driven confirmation timeline with persisted status;
+- subscribe to authorized `orders` Realtime changes and re-fetch the order;
+- display scheduled pickup and status using existing AIDA visual language.
+
+### Dashboard React
+
+Keep preview POS cart editing only as selection state, but make quote/place totals and persisted orders authoritative through the BFF:
+
+- quote current cart through `/api/v1/orders/quote`;
+- place ASAP or scheduled POS orders through `/api/v1/orders/place`;
+- add the live staff order board/queue using `/api/v1/orders`;
+- visually distinguish Scheduled / Confirmed / Preparing / Ready;
+- transition statuses through `/api/v1/orders/status` with `expectedVersion`;
+- refresh/refetch on order Realtime changes or a safe query invalidation strategy;
+- preserve existing AIDA dashboard components/tokens/layout conventions.
+
+No real payment processor exists. Frontend must use an explicit `Pay at counter`/unpaid demo path and must remove or disable copy that falsely implies Card/E-wallet/Student Wallet was processed.
+
+## Required frontend sources
+
+In both repos read normal governance docs first, then:
+
+- `docs/decisions/ADR-0010-authoritative-ordering-and-scheduled-fulfilment.md`
+- `docs/contracts/ORDER_AND_SCHEDULING_CONTRACT.md`
+
+Do not re-design the backend contract in frontend work unless actual repository/live evidence shows a defect.
+
+## Existing external validation debt
+
+TASK-AUTH-003 remains PARTIAL because the Vercel preview lacks its two publishable Supabase environment variables and the live project has zero approved real customer/staff/admin identities. Those operator gates will still be needed for a real-identity deployed E2E.
+
+For a local demo, the dashboard may run locally against the same Supabase project once an approved staff/admin identity exists; the customer app/device can independently use the same cloud project.
+
+## Exact next task
+
+Continue `TASK-DEMO-ORDER-001` on the current shared branch with **frontend-only integration and full client validation**, then prove:
+
+```text
+customer quote + ASAP/scheduled placement
+-> persisted order
+-> dashboard queue
+-> staff Preparing/Ready/Completed transition
+-> running customer app Realtime event
+-> authorized re-fetch
+-> visible status update without a fake timer
+```
+
+Do not begin payment, loyalty, inventory or analytics authority until this trusted order flow is integrated.
