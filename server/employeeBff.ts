@@ -66,13 +66,15 @@ const REFRESH_COOKIE = 'aida_employee_refresh';
 const REFRESH_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 class HttpFailure extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    message: string,
-    readonly clearSession = false,
-  ) {
+  readonly status: number;
+  readonly code: string;
+  readonly clearSession: boolean;
+
+  constructor(status: number, code: string, message: string, clearSession = false) {
     super(message);
+    this.status = status;
+    this.code = code;
+    this.clearSession = clearSession;
   }
 }
 
