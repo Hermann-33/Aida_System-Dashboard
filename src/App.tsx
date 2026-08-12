@@ -5,6 +5,7 @@ import { EmployeeLayout } from './layouts/EmployeeLayout';
 import { PosLayout } from './layouts/PosLayout';
 import { AdminLayout } from './layouts/AdminLayout';
 import { EmployeeWelcomePage } from './pages/EmployeeWelcomePage';
+import { AdminLoginPage } from './pages/AdminLoginPage';
 import { RoleSelectPage } from './pages/RoleSelectPage';
 import { PosShellPage } from './pages/PosShellPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
@@ -45,6 +46,12 @@ export default function App() {
           <Route element={<ProtectedRoute product="employee" allowAnonymous />}>
             <Route element={<EmployeeLayout />}>
               <Route path="/employee" element={<EmployeeWelcomePage />} />
+            </Route>
+          </Route>
+
+          <Route element={<ProtectedRoute product="admin" allowAnonymous />}>
+            <Route element={<EmployeeLayout />}>
+              <Route path="/admin/login" element={<AdminLoginPage />} />
             </Route>
           </Route>
 
