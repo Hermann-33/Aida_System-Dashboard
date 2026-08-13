@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 const API = process.env.E2E_API_URL || 'http://localhost:3011';
 const WEB = process.env.E2E_WEB_URL || 'http://localhost:5173';
+const PREVIEW_SUITE = process.argv.some((argument) => argument.includes('preview-closure'));
 
 /**
  * Critical browser flows against temporary environment only.
@@ -30,6 +31,7 @@ export default defineConfig({
         timeout: 120_000,
         env: {
           ...process.env,
+          ...(PREVIEW_SUITE ? { VITE_UI_PREVIEW_MODE: 'true' } : {}),
           // Proxy API through Vite — set VITE proxy target via env if needed
         },
       },

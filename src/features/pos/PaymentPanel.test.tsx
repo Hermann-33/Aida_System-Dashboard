@@ -78,7 +78,7 @@ const lines: CartLine[] = [
   },
 ];
 
-describe('PaymentPanel', () => {
+describe('detached preview PaymentPanel', () => {
   beforeEach(() => {
     resetPreviewOrderSequence(10521);
   });
@@ -134,8 +134,8 @@ describe('PaymentPanel', () => {
   });
 });
 
-describe('CounterWorkspace completed sale', () => {
-  it('hides Pay after successful payment', async () => {
+describe('CounterWorkspace authoritative payment boundary', () => {
+  it('routes the active POS sale to server placement instead of the preview tender', async () => {
     const user = userEvent.setup();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     queryClient.setQueryData(['pos-catalogue'], sharedCatalogue);
@@ -158,11 +158,8 @@ describe('CounterWorkspace completed sale', () => {
 
     await user.click(await screen.findByRole('button', { name: /latte/i }));
     await user.click(screen.getByRole('button', { name: /add to order/i }));
-    await user.click(screen.getByRole('button', { name: /^pay$/i }));
-    await user.click(screen.getByRole('button', { name: /^exact$/i }));
-    await user.click(screen.getByRole('button', { name: /confirm payment/i }));
-
+    expect(screen.getByRole('button', { name: /review & place/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^pay$/i })).not.toBeInTheDocument();
-    expect(document.querySelector('.order-ribbon__pay')).toHaveTextContent(/new sale/i);
+    expect(screen.queryByRole('button', { name: /^exact$|confirm payment/i })).not.toBeInTheDocument();
   });
 });
