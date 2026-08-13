@@ -37,12 +37,17 @@ function failClosedAuthPlugin(mode: string): Plugin {
 
 export default defineConfig(({ mode }) => {
   // The URL and publishable key are public Supabase client configuration. Keep
-  // safe AIDA defaults for local development so a missing .env file cannot
-  // make the same-origin BFF silently unavailable. Explicit environment values
-  // still override these defaults. Secret/service-role keys remain prohibited.
+  // safe AIDA defaults so a missing/blank local .env cannot make the same-origin
+  // BFF unavailable. Non-empty explicit environment values still override the
+  // defaults. Secret/service-role keys remain prohibited.
+  const loadedEnv = loadEnv(mode, process.cwd(), '');
   const serverEnv = {
-    ...AIDA_PUBLIC_SERVER_DEFAULTS,
-    ...loadEnv(mode, process.cwd(), ''),
+    ...loadedEnv,
+    AIDA_SUPABASE_URL:
+      loadedEnv.AIDA_SUPABASE_URL?.trim() || AIDA_PUBLIC_SERVER_DEFAULTS.AIDA_SUPABASE_URL,
+    AIDA_SUPABASE_PUBLISHABLE_KEY:
+      loadedEnv.AIDA_SUPABASE_PUBLISHABLE_KEY?.trim()
+      || AIDA_PUBLIC_SERVER_DEFAULTS.AIDA_SUPABASE_PUBLISHABLE_KEY,
   };
   return {
     plugins: [react(), tailwindcss(), aidaBffPlugin(serverEnv), failClosedAuthPlugin(mode)],
