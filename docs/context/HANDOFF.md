@@ -1,125 +1,106 @@
 # Current Handoff
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
 ## Current task
 
-`TASK-AUTH-005 — preview/live Admin session-loop regression`
+`TASK-CLOSEOUT-001 — current tranche completion`
 
-**Verdict:** COMPLETE for the bounded dashboard regression.
+**Verdict:** PARTIAL
 
-Branch: `codex/task-auth-005-preview-live-session-loop`, stacked on `codex/task-auth-004-runtime-access-fix`.
+Coordinated implementation branch in both repositories:
 
-## Reproduction and fix
+`codex/task-closeout-001-tranche-completion`
 
-On the untouched AUTH-005 base with UI preview enabled, Siti Manager could open Admin, but Members and Menu alternated with `/admin/login`. The privileged endpoints and the employee session probe returned `401 EMPLOYEE_SESSION_REQUIRED`; preview login had created only the local preview identity, not HttpOnly Supabase employee cookies.
+Integration PRs:
 
-The global 401 handler no longer destroys preview identity. ProtectedRoute owns route-level refresh and Admin Login only observes state. Preview Members makes no privileged request and displays the real-Admin requirement. Preview Menu reads `/api/v1/catalogue` and is read-only; no preview catalogue fixture or Admin mutation request is used. Live Admin endpoint, cookie, caller-JWT and RLS behavior is unchanged.
+- customer: PR #13 -> `master`
+- dashboard: PR #12 -> `main`
 
-Verification: lint passed with two existing Fast Refresh warnings; typecheck passed; 22 Vitest files / 99 tests passed; build and no-legacy-token assertion passed with the existing bundle-size warning; 7/7 Playwright tests passed; `git diff --check` passed.
+Both PRs remain draft until all closeout gates pass.
 
-## Remaining identity gate
+A parallel documentation-only reconciliation branch exists in both repos:
 
-Live Supabase still has zero Auth users and zero trusted admin/owner profiles. A real Admin/owner must still be created and promoted through the approved Auth/operator boundary before live Members or catalogue mutations can succeed. Preview Manager identity does not satisfy or weaken that gate.
+`codex/task-closeout-001-doc-reconciliation`
 
-## Previous AUTH-004 handoff
+It exists to capture the already-proven evidence without racing Codex implementation edits. Its documentation must be incorporated/reconciled into the final closeout heads before merge.
 
-Shared branch in both repositories:
+## What is already proven
 
-`codex/task-auth-004-runtime-access-fix`
+### Android customer Auth/member
 
-Stack:
+The rebuilt release APK was installed on the user's physical phone. Customer signup succeeded against live Supabase. Trusted Auth/profile/member provisioning succeeded and the new member appeared in Dashboard Members.
 
-`codex/task-demo-order-001-order-scheduling-backend`
-→ `codex/fix-auth-signup-diagnostics`
-→ `codex/task-auth-004-runtime-access-fix`
+Therefore the old `SocketException / Failed host lookup` runtime blocker and the old `physical device pending` / `zero identities` statements are closed/stale.
 
-Do not merge the stack out of order.
+### Shared catalogue
 
-## Problem reproduced from current evidence
+A real Owner signed into the live local Admin path and changed a catalogue price. The installed customer app observed the updated value. This proves protected Admin mutation -> Supabase revision/data -> customer invalidation/refetch in the real local-demo topology.
 
-### Customer
+Closeout baseline observed catalogue revision 15.
 
-The installed phone app still showed the generic Auth fallback. Fresh Supabase checks showed zero Auth users and no corresponding live identity/member row. The connector Auth log did not provide a recent signup event to correlate, so the old binary could not reveal the actual hosted Auth reason.
+### Identity/role state
 
-### Dashboard
+Dated closeout baseline:
 
-Members/Menu are protected Admin routes. `ProtectedRoute` performs a server session refresh; with no authenticated Admin session it correctly redirects away after the initial loading state. The live project currently has zero Auth users and zero trusted admin/owner profiles, so there is no valid identity that can satisfy that route today.
+- 9 Auth users/profiles;
+- 6 customer members;
+- 1 owner;
+- 1 admin;
+- 1 staff.
 
-This is not a reason to make Members public or bypass the route guard.
+Employee identities are intentionally not members.
 
-## Changes on this branch
+### Auth/session security
 
-### Customer repo
+Dashboard employee/Admin sessions remain same-origin HttpOnly/caller-JWT. TASK-AUTH-005 preview/live session separation is complete and tested; preview 401s no longer destroy preview identity, and preview Members/Menu do not fabricate privileged data or writes.
 
-- `apps/customer/lib/main.dart`
-  - active AIDA Supabase URL remains the default;
-  - active AIDA **publishable** key is now also a safe public default;
-  - explicit `--dart-define` values can still override both;
-  - no service-role/secret key is present.
-- `apps/customer/lib/data/repository/supabase_member_repository.dart`
-  - known Auth errors retain explicit mapping;
-  - unknown `AuthException` messages are normalized/capped and shown so the next physical-device attempt exposes the real upstream reason.
+### Order backend/customer client
 
-### Dashboard repo
+Authoritative order/scheduling schema/RPC/RLS, Dashboard order BFF and Flutter customer quote/place/history/status integration are implemented. No real payment authority exists; current order demo semantics are Pay at counter/unpaid.
 
-- `vite.config.ts`
-  - local BFF receives the active AIDA URL/publishable key by default;
-  - explicit env values override defaults;
-  - no service-role/secret key.
-- `src/auth/ProtectedRoute.tsx`
-  - still fail-closed;
-  - redirects unauthenticated Admin navigation to `/admin/login` with selected destination + session error context.
-- `src/pages/AdminLoginPage.tsx`
-  - tells the operator why Members/Menu require Admin sign-in;
-  - returns to the originally selected Admin route after successful login;
-  - distinguishes credentials, authorization, disabled-account, local BFF config and network errors.
+## Remaining closeout work
 
-## Supabase status
+### Customer repository
 
-Fresh live state on 2026-08-13:
+- commit a supported Android build-tool configuration instead of relying on local AGP/Gradle compatibility settings;
+- prove a clean-worktree release APK build;
+- rerun Flutter/customer/backend/security checks;
+- incorporate final mirrored docs.
 
-- Auth users: 0
-- admin/owner profiles: 0
-- security advisor: 0 lints
-- provisioning trigger/function/member-code authority unchanged
+### Dashboard repository
 
-No direct `auth.users` SQL insert was used.
+- replace preview transaction/order authority with the existing order BFF in live POS/order surfaces;
+- implement authoritative quote/place, server-policy scheduling, Pay-at-counter semantics, live queue and versioned status transitions;
+- retain HttpOnly employee token boundary and use BFF polling/refetch;
+- rerun lint/typecheck/Vitest/build/Playwright/security checks;
+- incorporate final mirrored docs.
 
-A temporary exact-account Admin-API bootstrap Edge Function was deployed for investigation, but the tool environment could not invoke the public function URL. No user was created. The function was immediately superseded by a disabled HTTP-410 version.
+### Cross-client
 
-## Required local validation
+Prove customer place -> persisted order -> Dashboard transition -> customer authorized status refresh. The closeout baseline currently has 0 retained orders.
 
-### Customer
+## Current security advisor
 
-From the customer checkout:
+Supabase security advisor currently reports one WARN: leaked-password protection disabled. Historical `0 lints` results remain valid historical evidence for their dates but are not the current advisor state.
 
-1. fetch/switch/pull `codex/task-auth-004-runtime-access-fix`;
-2. `cd apps/customer`;
-3. run `flutter pub get`, `flutter analyze`, `flutter test`;
-4. rebuild/install the app on the physical Android phone;
-5. attempt signup again.
+Do not commit passwords, service-role keys, employee bearer tokens or other secrets while closing the tranche.
 
-If signup still fails, report the **new exact Auth text**. Do not report only the old generic message; that means the phone is still running an older binary.
+## Merge policy
 
-### Dashboard
+Do not merge the old stacked PRs individually once the integration PRs are ready. The intended merge path is the final complete integration PR in each repo:
 
-From the dashboard checkout:
+1. customer PR #13 -> `master`;
+2. dashboard PR #12 -> `main`.
 
-1. fetch/switch/pull `codex/task-auth-004-runtime-access-fix`;
-2. `npm ci`;
-3. `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`;
-4. restart `npm run dev`;
-5. select Members or Menu.
+The exact order can be chosen at final closeout if both are compatible, but neither should merge while the other still depends on unresolved shared-contract work.
 
-Expected behavior without an identity: explicit redirect to Admin sign-in, not an unexplained disappearing tab.
+After successful integration merges, close/supersede obsolete stacked draft PRs rather than leaving ambiguous merge paths.
 
-Expected behavior after a trusted Admin/owner identity exists: sign in once, then return to the selected Members/Menu route and load through the existing caller-JWT BFF/RLS path.
+## Deployment note
 
-## Identity bootstrap gate
+The current user-validated demo topology is local Dashboard PC -> cloud Supabase -> installed Android phone. Vercel deployment/runtime configuration remains deferred operational work and must not be described as production-complete.
 
-The remaining blocker is a real Auth identity. Once customer signup succeeds (or an Auth user is created through the Supabase Auth Admin surface), the intended operator can be promoted through the trusted DB/operator boundary to `admin`/`owner`. Do not allow public signup metadata or a browser request to self-assign that role.
+## Exact next action
 
-## Next product task after AUTH-004 validation
-
-Resume the dashboard half of `TASK-DEMO-ORDER-001`: authoritative POS quote/place plus the live Scheduled/Confirmed/Preparing/Ready order board and status transitions. Keep payment, loyalty, inventory and reporting authority out of scope until the order flow closes end to end.
+Let the two Codex closeout runs finish their bounded customer/dashboard work. Then reconcile this documentation into their final heads, compare mirrored governance files, rerun live Supabase/security evidence, inspect PR mergeability and only mark TASK-CLOSEOUT-001 `COMPLETE` if Android build reproducibility, Dashboard order integration and cross-client order E2E all pass.
