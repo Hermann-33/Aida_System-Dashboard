@@ -1,28 +1,37 @@
-> Scope note: this map always describes the customer Flutter repository, even when read from the mirrored dashboard copy.
+> Scope note: this map describes the current customer Flutter runtime, even when read from the mirrored Dashboard repository.
 
-# UI Screen Map
+# Customer UI Screen Map
 
-Statuses describe current customer runtime behavior, not design intent.
+Updated: 2026-08-14
 
-| Surface | File path | Purpose / role | Current data source | Status |
-|---|---|---|---|---|
-| Auth gate | `apps/customer/lib/main.dart` | customer startup selection | local `authStateProvider` | Mock |
-| Sign in / sign up | `features/auth/login_screen.dart` | credentials/registration UI | mock repo + client-generated member | UI/mock |
-| Forgot password | `features/auth/widgets/forgot_password_sheet.dart` | recovery request | mock delay | UI/mock |
-| App shell | `features/shell/app_shell.dart` | five-tab frame/cart access | Riverpod local state | UI/local |
-| Home | `features/home/home_screen.dart` | points/stamps/promos/categories/menu actions | mock providers + local check-in | UI/mock/local |
-| Rewards | `features/rewards/rewards_screen.dart` | balance/vouchers/reward catalogue | mock | UI/mock |
-| Membership QR | `features/card/membership_card_screen.dart` | member identity code | mock/session member | UI/mock; offline persistence missing |
-| Menu | `features/menu/menu_screen.dart` | browse/filter/favorites | mock catalogue + local favourites | UI/mock/local |
-| Item detail | `features/menu/item_detail_screen.dart` | size/add-ons/note/quantity/cart | mock item + widget state | UI/mock/local |
-| Cart | `features/cart/cart_screen.dart` | edit lines/subtotal/checkout | local cart + client arithmetic | UI/local |
-| Payment sheet | `features/cart/cart_screen.dart` | method selection | local enum | UI/mock |
-| Order confirmation | `features/cart/order_confirmation_screen.dart` | number/timed stages | client random number/timer | Simulated |
-| Order history | `features/history/order_history_screen.dart` | current-process orders | memory | Session-only |
-| Order receipt | `features/history/order_detail_screen.dart` | local receipt | `PastOrder` + mock menu | Session-only |
-| Profile | `features/profile/profile_screen.dart` | member/account menu | mock/session member | UI/partial placeholders |
-| Edit profile | `features/profile/edit_profile_screen.dart` | local edits | member overlay | Session-only |
+| Surface | Purpose | Current authority/status |
+|---|---|---|
+| Account gate and entry | restore/create customer session | Supabase customer session; Android runtime physically validated |
+| Account recovery request | request account recovery | Supabase request boundary; delivery/callback not separately closed |
+| App shell | customer navigation | local presentation state |
+| Home | categories/featured/promos | shared catalogue plus deferred promo/loyalty presentation |
+| Rewards | rewards/vouchers | preview/deferred loyalty |
+| Membership QR | customer member code | owner-scoped member read + minimum per-user offline member-code cache |
+| Menu | browse/filter/favorites | shared Supabase catalogue + revision invalidation; local favorites |
+| Item detail | variant/add-ons/note/quantity | shared catalogue + local selection state |
+| Cart | edit intended selections | local intent/estimate only; not commercial authority |
+| Order checkout | quote, ASAP/scheduled pickup, Pay at counter, placement | ordering policy + authoritative quote/place RPCs |
+| Order confirmation | persisted order identity/status | backend order snapshot; no fake status timer |
+| Order history | customer orders | backend customer-order snapshots |
+| Order detail | immutable placed-order detail | backend order snapshot |
+| Profile | member/account presentation | trusted member read plus deferred profile features |
+| Edit profile | profile-edit UI | trusted persistence not complete |
 
-Visible placeholders include social sign-in, promo detail, notifications, reward redemption, voucher consumption, profile photo, stats, settings, invite and help.
+## Validated cross-system evidence
 
-Planned/absent customer surfaces include real session bootstrap, verification-pending flow, scheduled-order slots, points ledger, password change/delete account and real settings. POS/Admin surfaces exist in the separate dashboard repository and are mapped under `docs/dashboard/UI_SCREEN_MAP.md`.
+- Physical Android customer creation succeeded and the trusted member appeared in Dashboard Members.
+- A real Owner catalogue price change in Dashboard Admin Menu propagated to the installed customer Menu.
+- The Android release networking failure from TASK-AUTH-006 is closed.
+
+## Boundaries still deferred
+
+Local cart arithmetic may be an estimate, but final quote/total/order number/schedule/status come from the backend. No trusted payment processor exists; the authoritative demo order path is Pay at counter / unpaid.
+
+Loyalty/rewards/offers/promotions, social providers, notifications, voucher consumption, profile-write persistence, settings/help and other roadmap domains remain separate work.
+
+Final cross-client order fulfilment evidence remains a TASK-CLOSEOUT-001 gate while the Dashboard React order board is being integrated with the existing order BFF.
