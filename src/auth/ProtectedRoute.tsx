@@ -22,7 +22,7 @@ export function ProtectedRoute({ product, allowAnonymous = false }: ProtectedRou
   const location = useLocation();
 
   useEffect(() => {
-    void refreshEmployeeSessionFromServer().then(() => setReady(true));
+    void refreshEmployeeSessionFromServer().finally(() => setReady(true));
   }, []);
 
   if (!ready) {
@@ -52,7 +52,17 @@ export function ProtectedRoute({ product, allowAnonymous = false }: ProtectedRou
     }
     if (session.status !== 'authenticated' || !session.identity) {
       const loginPath = product === 'admin' ? '/admin/login' : '/employee';
-      return <Navigate to={loginPath} replace state={{ from: location.pathname }} />;
+      return (
+        <Navigate
+          to={loginPath}
+          replace
+          state={{
+            from: `${location.pathname}${location.search}`,
+            reason: product === 'admin' ? 'ADMIN_SIGN_IN_REQUIRED' : 'EMPLOYEE_SIGN_IN_REQUIRED',
+            sessionErrorCode: session.lastErrorCode,
+          }}
+        />
+      );
     }
     if (!canAccessProduct(session.identity, product)) {
       return <Navigate to="/unauthorized" replace />;
