@@ -1,22 +1,40 @@
 # POS/Admin Backend Integration Plan
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
-## Deployment/Auth boundary
+## Current local-demo boundary
 
-The Vercel project and a clean `READY` preview deployment exist. Its BFF remains unavailable there until an operator configures `AIDA_SUPABASE_URL` and `AIDA_SUPABASE_PUBLISHABLE_KEY`. No service-role key is required or allowed.
+The validated topology is local Dashboard PC -> cloud Supabase -> installed Android customer app. Trusted Owner/Admin/Staff identities now exist.
 
-For local demo/frontend work, the dashboard can run locally against the same cloud Supabase once an approved employee identity exists. Preserve the existing same-origin HttpOnly session model; never add browser-local employee bearer tokens for convenience.
+Privileged Dashboard requests use the existing same-origin BFF with HttpOnly employee session cookies. The BFF validates trusted profile role/disabled state and calls Supabase as the current employee. Browser code must not receive privileged server credentials or persist employee bearer tokens.
 
-## Admin + POS catalogue — integrated
+A historical Vercel deployment exists, but its hosted BFF runtime was not completed. Hosted deployment remains deferred operational work for this closeout.
 
-Admin Menu uses the shared catalogue BFF for trusted management. POS browsing uses the same published catalogue for categories, availability, base display prices, per-item variants and compatible add-ons. There is no runtime preview-catalogue fallback.
+## Members — integrated and validated
 
-## Orders and scheduled pickup — BFF ready, React integration next
+Admin/owner Members uses `/api/v1/admin/members` through the protected BFF/RLS path. Preview mode does not fabricate privileged member data.
 
-ADR-0010 and `docs/contracts/ORDER_AND_SCHEDULING_CONTRACT.md` are authoritative.
+A physical Android signup created a trusted customer/member that appeared in Dashboard Members.
 
-New same-origin endpoints:
+## Catalogue — integrated and validated
+
+Admin Menu uses the shared catalogue BFF for management. POS browsing uses the same published categories/items/availability/prices/variants/add-ons. There is no runtime preview-catalogue fallback.
+
+A real Owner changed a catalogue price and the installed Android customer app observed the updated value.
+
+## Preview/live session separation — integrated
+
+TASK-AUTH-005 is complete for its bounded regression:
+
+- preview identity remains local/non-authoritative;
+- live session failures no longer destroy preview identity;
+- preview Members performs no privileged member read;
+- preview Menu uses the public catalogue read-only;
+- real employee session expiry still clears real session state.
+
+## Ordering — server/BFF implemented, React closeout work remains
+
+Existing endpoints:
 
 - `GET /api/v1/orders/policy`
 - `GET /api/v1/orders`
@@ -26,49 +44,32 @@ New same-origin endpoints:
 - `POST /api/v1/orders/status`
 - `POST /api/v1/admin/orders/policy`
 
-All employee mutations validate the existing HttpOnly employee session, forward the caller JWT to Supabase and require same origin. No service-role credential or browser-readable employee JWT is part of the integration.
+### Required POS integration
 
-### POS integration
+1. Keep cart/customization as selection state only.
+2. Send catalogue item/variant/add-on IDs, quantities, notes and fulfilment intent—not trusted prices/totals/order state.
+3. Offer ASAP / Schedule for later using server policy.
+4. Render `/api/v1/orders/quote` as the authoritative line/subtotal/total result.
+5. Reuse one `clientRequestId` for retries of the same intended placement.
+6. Use `/api/v1/orders/place`; persisted order number/total/schedule/status come from the response.
+7. Clear the sale only after successful persistence and retain it on failure.
+8. Current POS placement is guest-order only; do not invent member attachment from preview state.
 
-1. Keep current POS cart/customization interaction as **selection state**.
-2. Build quote payloads from shared catalogue item/variant/add-on IDs, quantities and notes only.
-3. Offer ASAP / Schedule for later using `/api/v1/orders/policy`.
-4. Generate schedule slots from backend `serverNow` + timezone/lead/interval/horizon rather than a browser-clock-only hardcode.
-5. POST the selections to `/api/v1/orders/quote` and render the returned authoritative subtotal/total/line breakdown.
-6. On place, generate a UUID `clientRequestId`. Reuse it for retries of the same intended order; use a new UUID for a new order.
-7. POST to `/api/v1/orders/place`. Persisted order number, total, schedule and status come from the response.
-8. Do not persist preview/local cart totals as trusted order totals.
-9. Clear/reset the sale only after the backend confirms successful placement.
+### Live Orders rail
 
-Current POS placement is a guest-order boundary. Do not invent customer/member association from browser input in this frontend task.
+Live mode must use `/api/v1/orders`, not `PREVIEW_TRANSACTIONS`, for Scheduled/Confirmed/Preparing/Ready state and terminal history where appropriate.
 
-### Live staff order board
+Status actions call `/api/v1/orders/status` with the current `statusVersion` as `expectedVersion`. A version conflict must refetch instead of overwriting newer state.
 
-Use `/api/v1/orders` as the queue source and display the persisted statuses:
+### Refresh model
 
-- Scheduled
-- Confirmed/New
-- Preparing
-- Ready
+Employee tokens remain HttpOnly. React therefore uses same-origin BFF polling/refetch rather than direct privileged Supabase Realtime:
 
-Completed/cancelled orders may be presented in an existing history/secondary surface if it fits the current UI; do not redesign the entire POS around them.
+- short 2–3 second refetch while the board is active;
+- immediate invalidation after place/status mutation;
+- focus/reconnection refresh where supported.
 
-Scheduled entries should visibly show their requested pickup time and be ordered using the server response order. Staff actions must call `/api/v1/orders/status` with the current `statusVersion` as `expectedVersion`.
-
-Handle `ORDER_VERSION_CONFLICT` (HTTP 409) by refetching the order/queue and telling the staff member the order changed; never overwrite with a stale UI state.
-
-### Queue refresh model
-
-The employee JWT intentionally remains HttpOnly, so React cannot safely open a caller-authenticated Supabase Realtime channel without breaking ADR-0008.
-
-For this demo frontend:
-
-- use TanStack Query/the existing query layer against `/api/v1/orders`;
-- use a short, reasonable refetch interval such as 2–3 seconds while the order board is active;
-- invalidate/refetch immediately after local place/status mutations;
-- do not expose or copy the employee access token into browser JavaScript merely for Realtime.
-
-Customer Flutter uses direct owner-scoped `orders` Realtime, so staff status updates still appear immediately on the customer side.
+Customer Flutter can use its owner-scoped Supabase session for order invalidation/refetch.
 
 ## Scheduling policy
 
@@ -79,25 +80,15 @@ Current backend defaults:
 - 15-minute slots
 - 7-day maximum advance
 
-Branch opening hours/closures/capacity are not modeled. Do not add UI claims that a slot is branch-capacity-approved.
-
-Admin schedule-policy mutation is already available at `/api/v1/admin/orders/policy`. A dedicated settings UI is optional for the demo unless it fits an existing Admin settings surface cleanly; do not create a major new settings redesign just to expose it.
+Branch opening hours/closures/capacity are not modeled and must not be implied by the UI.
 
 ## Payment boundary
 
-No real payment processor exists. The frontend should use an explicit `Pay at counter`/unpaid demo path and remove/disable transaction copy that implies Card/E-wallet/Student Wallet has been successfully settled.
+No trusted payment processor exists. The authoritative demo order path is explicit **Pay at counter / unpaid**. Fulfilment completion is not evidence of payment settlement.
 
-Fulfilment completion is not proof of payment settlement.
+## Closeout checks
 
-## Design constraint
-
-This task is a **frontend integration, not a visual redesign**. Before editing, inspect the existing POS/Admin theme tokens, component primitives, cards, tables/queues, dialogs/sheets, buttons, status badges, spacing/radii/shadows, responsive behavior and Playwright/component tests. New order/schedule surfaces must look native to the existing AIDA dashboard.
-
-Do not introduce a second design system, new global palette, arbitrary status colors, unrelated iconography, typography replacements, or broad layout restyling.
-
-## Validation after frontend implementation
-
-Run at minimum:
+After React order integration run:
 
 - `npm ci`
 - `npm run lint`
@@ -105,7 +96,8 @@ Run at minimum:
 - `npm test`
 - `npm run build`
 - `npm run test:e2e`
-- focused order BFF/client/queue/status/checkout tests
+- focused quote/place/queue/status/version-conflict tests
 - `git diff --check`
+- production secret/token scans
 
-Also confirm legacy token/localStorage assertions still pass and no service-role/browser staff token was introduced.
+Final tranche E2E must prove customer authoritative placement -> persisted order -> Dashboard transition -> customer authorized status refresh. Dated evidence is in `docs/context/CLOSEOUT_EVIDENCE_2026-08-14.md`.
