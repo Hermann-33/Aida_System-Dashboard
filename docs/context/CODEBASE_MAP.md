@@ -1,71 +1,69 @@
 # Codebase Map
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
 ## Customer repository — `Hermann-33/Aida_System`
 
-### Existing identity/catalogue runtime
+### Current customer runtime
 
-- `apps/customer/lib/data/repository/supabase_member_repository.dart` — Supabase Auth plus owner member/profile reads and minimum cached member-code fallback.
-- `apps/customer/lib/data/cache/offline_member_cache.dart` — per-user durable member ID/code cache only; excludes roles, verification, loyalty and pricing authority.
-- `apps/customer/lib/data/repository/supabase_catalogue_repository.dart` — live `get_catalogue()` snapshot and `catalogue_revision` stream.
-- `apps/customer/lib/domain/repository/catalogue_repository.dart` — customer read-only catalogue capability.
-- `apps/customer/lib/domain/model/catalogue_snapshot.dart`, `menu_variant.dart`, `menu_item.dart` — shared catalogue model.
-- `apps/customer/lib/application/providers.dart` — Auth/member/catalogue/cart/provider composition.
-- `apps/customer/lib/features/menu/` — DB-driven menu/item customization UI.
+- `apps/customer/android/app/src/main/AndroidManifest.xml` — production Android permissions, including required network access.
+- `apps/customer/test/android_release_manifest_test.dart` — release-permission regression.
+- `apps/customer/lib/data/repository/supabase_member_repository.dart` — customer account/member repository and trusted member/profile reads.
+- `apps/customer/lib/data/cache/offline_member_cache.dart` — per-user minimum member-code cache only.
+- `apps/customer/lib/data/repository/supabase_catalogue_repository.dart` — shared catalogue snapshot + revision invalidation.
+- `apps/customer/lib/application/providers.dart` — customer account/member/catalogue/cart/order provider composition.
+- `apps/customer/lib/features/menu/` — shared-catalogue menu/customization UI.
 
-### Current order frontend that Codex must replace/integrate
+### Integrated customer ordering
 
-- `apps/customer/lib/features/cart/cart_screen.dart` — currently local cart arithmetic plus fake payment-method sheet and random local order number; must consume authoritative quote/place and Pay-at-counter demo semantics.
-- `apps/customer/lib/features/cart/order_confirmation_screen.dart` — currently advances status using a local timer; must render persisted backend order status and scheduled pickup.
-- `apps/customer/lib/domain/model/order.dart` — currently local `PastOrder` model/status; must be replaced/refactored around the backend order snapshot.
-- `apps/customer/lib/features/history/order_history_screen.dart` and `order_detail_screen.dart` — currently local history presentation; should preserve visual design while reading `get_my_orders()`/`get_order()`.
-- existing cart/menu widgets remain useful selection/presentation state but cannot be commercial authority.
+- `apps/customer/lib/domain/model/order.dart` — schedule policy, selection payload, quote lines and persisted order snapshots/statuses.
+- `apps/customer/lib/domain/repository/order_repository.dart` and `data/repository/supabase_order_repository.dart` — policy/quote/place/history/detail and owner-scoped order invalidation.
+- `apps/customer/lib/application/order_checkout.dart` — schedule-slot derivation and retry-stable placement request IDs.
+- `apps/customer/lib/features/cart/cart_screen.dart` and `order_checkout_sheet.dart` — local selection state, authoritative quote, ASAP/scheduled choice, Pay at counter and persisted placement.
+- `apps/customer/lib/features/cart/order_confirmation_screen.dart` — persisted status presentation; no local progression timer.
+- `apps/customer/lib/features/history/order_history_screen.dart` and `order_detail_screen.dart` — backend order history/detail.
 
-### Canonical Supabase ownership
+### Canonical backend ownership
 
-- `supabase/migrations/20260812182212_create_authoritative_orders_and_scheduling.sql` — authoritative order/schedule schema, RPCs, RLS, Realtime publication.
-- `supabase/migrations/20260812183029_index_order_foreign_keys.sql` — forward FK index hardening.
-- `supabase/tests/order_integration.sql` — canonical transactional pricing/schedule/idempotency/authorization/status regression.
-- earlier identity/catalogue migrations remain canonical in this repository only.
-
-### Frontend integration references
-
-- `docs/decisions/ADR-0010-authoritative-ordering-and-scheduled-fulfilment.md`
-- `docs/contracts/ORDER_AND_SCHEDULING_CONTRACT.md`
+- `supabase/` — canonical migration/test workspace for both clients.
+- `supabase/migrations/20260812182212_create_authoritative_orders_and_scheduling.sql` — order/schedule schema, RPCs, RLS and Realtime publication.
+- `supabase/migrations/20260812183029_index_order_foreign_keys.sql` — order FK index hardening.
+- `supabase/tests/auth_membership_integration.sql` — account/member regression.
+- `supabase/tests/catalogue_integration.sql` — catalogue regression.
+- `supabase/tests/order_integration.sql` — quote/schedule/idempotency/authorization/status regression.
 
 ## Dashboard repository — `Hermann-33/Aida_System-Dashboard`
 
-### Existing trusted server boundaries
+### Trusted server boundaries
 
-- `server/employeeBff.ts` — employee login/session/logout/Admin Members boundary with HttpOnly cookies and caller-JWT semantics.
-- `server/catalogueBff.ts` — public/admin catalogue BFF.
-- `server/viteBffPlugin.ts` — mounts BFF routes in Vite dev/preview.
-- `api/v1/auth/*`, `api/v1/admin/members.ts`, catalogue adapters — production/Vercel route adapters.
+- `server/employeeBff.ts` — employee/management account/session and protected Members boundary.
+- `server/catalogueBff.ts` — public/admin catalogue boundary.
+- `server/orderBff.ts` — order policy/queue/detail/quote/place/status/admin-policy boundary.
+- `server/viteBffPlugin.ts` — local Vite route mounting.
+- `api/v1/**` — production/serverless adapters for the same server boundaries.
 
-### New order backend/BFF
+### Integrated Dashboard frontend
 
-- `server/orderBff.ts` — public schedule-policy plus authenticated employee order queue/detail/quote/place/status/admin-policy handlers.
-- `server/orderBff.test.ts` — origin/session/caller-JWT/conflict/admin-policy contract coverage.
-- `api/v1/orders/policy.ts` — public schedule policy.
-- `api/v1/orders.ts` — employee order queue.
-- `api/v1/orders/detail.ts` — employee order detail.
-- `api/v1/orders/quote.ts` — authoritative POS quote.
-- `api/v1/orders/place.ts` — idempotent POS placement.
-- `api/v1/orders/status.ts` — versioned staff status transition.
-- `api/v1/admin/orders/policy.ts` — admin-only schedule-policy mutation.
+- `src/auth/ProtectedRoute.tsx`, `src/auth/employeeSession.ts`, `src/pages/AdminLoginPage.tsx` — protected management navigation/session UI.
+- `src/features/admin/AdminMembersLoyaltyReportPage.tsx` + `memberDirectory.ts` — protected Members read; loyalty activity remains deferred/preview.
+- `src/features/admin/AdminMenuPage.tsx` / `AdminMenuEditorPage.tsx` — shared catalogue management.
+- `src/features/catalogue/catalogueClient.ts` and `src/features/pos/posCatalogue.ts` — shared catalogue browser contracts.
+- `src/features/pos/CounterWorkspace.tsx` / `ModifierSheet.tsx` — POS selection/customization UI; TASK-CLOSEOUT-001 is replacing preview live-order authority with the existing order server boundary.
 
-### Existing dashboard frontend that Codex must integrate
+### Dashboard order closeout target
 
-- `src/features/catalogue/catalogueClient.ts` and `src/features/pos/posCatalogue.ts` — existing shared catalogue browser contracts.
-- `src/features/pos/CounterWorkspace.tsx` / `ModifierSheet.tsx` — POS selection/customization UI; preserve its design and selection ergonomics, but replace preview total/order persistence authority with the order BFF.
-- existing Admin/POS navigation, cards, dialogs, badges, table/queue patterns and theme tokens are the visual design source for the live order board.
-- existing preview cart/tender/order objects may remain only as temporary UI selection state where needed; they must not be persisted or displayed as trusted server totals/order status.
+The existing order server endpoints already provide:
 
-### Dashboard refresh model
+- ordering policy;
+- live queue/detail;
+- authoritative POS quote/place;
+- versioned status transition;
+- management schedule-policy update.
 
-The employee access token remains HttpOnly by design. React therefore must not receive/expose a Supabase staff JWT merely to subscribe directly to Realtime. For the demo order board, use TanStack Query (or the existing query layer) against `/api/v1/orders` with a short safe refetch interval and immediate invalidation after local place/status mutations. Customer Flutter owns the direct owner-scoped `orders` Realtime subscription.
+The remaining React integration must use those endpoints for final totals/order identity, scheduled pickup, live Orders rail and legal status controls. The employee browser boundary remains protected; the live order board uses short same-origin polling/refetch rather than weakening that architecture for direct privileged browser Realtime.
 
-## Shared frontend design constraint
+## Shared design constraint
 
-TASK-DEMO-ORDER-001 frontend work is an **integration, not a redesign**. Codex must inspect and reuse each application's existing theme tokens, typography, spacing, radii, shadows, cards, sheets/dialogs, buttons, status pills, responsive patterns and existing golden/UI tests before adding scheduled-pickup or order-status surfaces. Do not introduce a parallel design system or arbitrary styling.
+Current closeout work is integration, not a redesign. Existing AIDA theme tokens, layout patterns, components and reviewed test/golden behavior remain the visual source of truth.
+
+See `docs/context/CLOSEOUT_EVIDENCE_2026-08-14.md` for the dated validation snapshot and `docs/context/ROADMAP.md` for deferred domains.
