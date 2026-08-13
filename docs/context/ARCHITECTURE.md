@@ -1,6 +1,6 @@
 # AIDA Café Architecture
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
 ```mermaid
 flowchart LR
@@ -68,6 +68,8 @@ The current scheduled-pickup policy is a single-café policy: `Asia/Kuala_Lumpur
 Immutable order lines/add-ons are not separately published. Customer clients subscribe with their Supabase session and refetch the full authorized order after a header change.
 
 The dashboard employee token remains HttpOnly, so React must not expose it merely to open a Supabase Realtime connection. The current secure demo integration should refetch/poll the same-origin order BFF for the employee queue and invalidate immediately after local status/place mutations. A future server-side event bridge can replace polling if required.
+
+TASK-CLOSEOUT-001 implements that dashboard integration: a typed order client maps local cart selections to intent-only payloads, authoritative quote/place responses drive totals and receipts, scheduled choices come from server policy, and the staff queue polls at 2.5 seconds with versioned legal transitions and conflict refetch.
 
 ## Explicitly separate authority
 

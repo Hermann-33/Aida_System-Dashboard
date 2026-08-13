@@ -1,6 +1,6 @@
 # AIDA Café Project Brief
 
-Updated: 2026-08-12
+Updated: 2026-08-14
 
 ## Product purpose
 
@@ -12,19 +12,19 @@ AIDA Café is the ordering, membership, loyalty and café-operations system for 
 
 Repository: `Hermann-33/Aida_System`.
 
-Flutter customer UI for authentication, home/promotions, rewards/vouchers, membership QR, menu browsing/configuration, favourites, cart, payment-method selection, order tracking/history and profile. It is currently a polished prototype still bound to mock/session-local data; no Flutter Supabase client is wired yet.
+Flutter customer UI for authentication, member provisioning, shared catalogue browsing/configuration, authoritative quote/place, scheduled pickup, history and persisted status refresh. Rewards/vouchers, real payment settlement and several downstream domains remain preview/deferred.
 
 ### POS/Admin dashboard
 
 Repository: `Hermann-33/Aida_System-Dashboard`.
 
-React 19 + TypeScript + Vite browser application with employee access, terminal enrolment, POS, orders, payments, member/QR lookup, loyalty, shifts, branches/locations, terminals, employees/access, menu/catalogue, inventory, marketing, reporting, audit, integrations and settings. It is currently a frontend preview using deterministic fixtures, component/module state and session storage; no Supabase SDK or durable transactional backend is connected.
+React 19 + TypeScript + Vite browser application. Trusted employee/Admin, Members, catalogue, POS quote/place and staff order queue/status paths use same-origin BFF APIs backed by the shared Supabase project. Many non-tranche operational surfaces remain explicit preview/local functionality.
 
 ### Shared backend
 
 Supabase project **Aida System**, ref `eswovqxqzfevcdwwcmuh`.
 
-The first database foundation is implemented: trusted profiles/application roles, members/server-issued member codes and student-verification records with RLS. Menu, quote/order, payment, loyalty, POS operational, inventory, marketing and reporting persistence remain to be built.
+Trusted identity/membership, catalogue, quote/order, scheduled pickup and fulfilment persistence are implemented with RLS and controlled RPCs. Payment, loyalty, inventory, marketing, reporting and branch-capacity authority remain deferred.
 
 ## Target users
 
@@ -38,10 +38,10 @@ The two frontends are views/controllers over one operational system. They must u
 
 ## Current maturity
 
-- Customer UI: prototype; mock/session-local business data.
-- Dashboard UI: broad preview; fixture/local/session state with planned HTTP adapters.
-- Supabase: real identity/membership foundation exists; not yet connected to either frontend.
-- Full ordering/loyalty/operations: `PARTIAL` because authoritative shared persistence and operational integration are missing.
+- Customer: live Auth/member/catalogue/order integration exists; deferred domains remain preview.
+- Dashboard: live Admin/member/catalogue/order integration exists; deferred operations remain preview.
+- Supabase: authoritative identity/member, catalogue, order/schedule and fulfilment state.
+- Current ordering tranche: implementation complete across backend and both clients; final fresh cross-client live E2E evidence remains the closeout gate.
 
 ## Core business domains
 

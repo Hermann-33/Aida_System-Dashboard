@@ -283,6 +283,8 @@ Those will build on trusted orders later.
 
 ## Required frontend completion proof
 
+Both coordinated client implementations now consume this contract. Dashboard-specific proof covers selection-only quote payloads, authoritative totals, stable idempotent retry, server-policy scheduling, Pay-at-counter wording, persisted queue polling, legal versioned transitions, terminal states and conflict refetch. A fresh credential-backed cross-client live journey remains the final closeout evidence gate.
+
 The overall feature remains `PARTIAL` until both frontends are implemented and prove:
 
 ```text

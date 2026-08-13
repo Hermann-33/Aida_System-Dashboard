@@ -1,6 +1,6 @@
 # POS/Admin State and Data Flow
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
 ## Admin catalogue
 
@@ -44,7 +44,7 @@ item/variant/add-on IDs + quantity + note
  -> authoritative line/subtotal/total sen
 ```
 
-Do not use preview/local total arithmetic as persisted order authority after integration.
+The current integration labels local cart arithmetic as an estimate and renders the returned quote as the authoritative total.
 
 ## ASAP / scheduled POS order
 
@@ -61,7 +61,7 @@ GET /api/v1/orders/policy
  -> persisted guest POS order
 ```
 
-Use the same `clientRequestId` for retries of the same intended placement. Generate another UUID for a genuinely new order.
+The checkout keeps the same `clientRequestId` for retries of the same intended placement, including returning from the review surface. A genuinely changed/new order receives another UUID.
 
 Clear/reset the POS sale only after successful backend placement.
 
@@ -77,7 +77,7 @@ order board active
 
 The staff bearer token is intentionally unavailable to JavaScript because ADR-0008 keeps it HttpOnly. Do not weaken that security model to get direct Supabase Realtime in React.
 
-For the current demo, the live-feeling dashboard queue should:
+For the current demo, the implemented dashboard queue:
 
 - refetch `/api/v1/orders` every ~2–3 seconds while visible;
 - invalidate/refetch immediately after POS placement;

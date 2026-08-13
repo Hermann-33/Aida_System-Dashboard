@@ -1,6 +1,6 @@
 # Codebase Map
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
 ## Customer repository — `Hermann-33/Aida_System`
 
@@ -14,13 +14,9 @@ Updated: 2026-08-13
 - `apps/customer/lib/application/providers.dart` — Auth/member/catalogue/cart/provider composition.
 - `apps/customer/lib/features/menu/` — DB-driven menu/item customization UI.
 
-### Current order frontend that Codex must replace/integrate
+### Coordinated customer order frontend
 
-- `apps/customer/lib/features/cart/cart_screen.dart` — currently local cart arithmetic plus fake payment-method sheet and random local order number; must consume authoritative quote/place and Pay-at-counter demo semantics.
-- `apps/customer/lib/features/cart/order_confirmation_screen.dart` — currently advances status using a local timer; must render persisted backend order status and scheduled pickup.
-- `apps/customer/lib/domain/model/order.dart` — currently local `PastOrder` model/status; must be replaced/refactored around the backend order snapshot.
-- `apps/customer/lib/features/history/order_history_screen.dart` and `order_detail_screen.dart` — currently local history presentation; should preserve visual design while reading `get_my_orders()`/`get_order()`.
-- existing cart/menu widgets remain useful selection/presentation state but cannot be commercial authority.
+The coordinated customer stack now contains authoritative quote/place, ASAP/scheduled pickup, history/detail and persisted status refresh integration. Exact customer file-level facts must be mirrored from the customer closeout branch; this dashboard checkout does not edit or independently re-audit that repository.
 
 ### Canonical Supabase ownership
 
@@ -55,16 +51,19 @@ Updated: 2026-08-13
 - `api/v1/orders/status.ts` — versioned staff status transition.
 - `api/v1/admin/orders/policy.ts` — admin-only schedule-policy mutation.
 
-### Existing dashboard frontend that Codex must integrate
+### Integrated dashboard order frontend
 
-- `src/features/catalogue/catalogueClient.ts` and `src/features/pos/posCatalogue.ts` — existing shared catalogue browser contracts.
-- `src/features/pos/CounterWorkspace.tsx` / `ModifierSheet.tsx` — POS selection/customization UI; preserve its design and selection ergonomics, but replace preview total/order persistence authority with the order BFF.
+- `src/features/catalogue/catalogueClient.ts` and `src/features/pos/posCatalogue.ts` — shared catalogue browser contracts.
+- `src/features/orders/orderClient.ts` — typed same-origin policy/quote/place/queue/detail/status adapter, selection-only payload mapping, schedule-slot generation, polling constants and legal transition table.
+- `src/features/orders/OrderCheckoutPanel.tsx` — authoritative quote review, ASAP/scheduled selection, stable idempotent placement retry, Pay-at-counter wording and persisted receipt.
+- `src/features/orders/OrderBoard.tsx` — live polled queue/detail and versioned legal status transitions with conflict refetch.
+- `src/features/pos/CounterWorkspace.tsx` / `ModifierSheet.tsx` — shared-catalogue selection UI and local cart estimate; no preview order/tender authority in the active placement or Orders rail.
 - existing Admin/POS navigation, cards, dialogs, badges, table/queue patterns and theme tokens are the visual design source for the live order board.
 - existing preview cart/tender/order objects may remain only as temporary UI selection state where needed; they must not be persisted or displayed as trusted server totals/order status.
 
 ### Dashboard refresh model
 
-The employee access token remains HttpOnly by design. React therefore must not receive/expose a Supabase staff JWT merely to subscribe directly to Realtime. For the demo order board, use TanStack Query (or the existing query layer) against `/api/v1/orders` with a short safe refetch interval and immediate invalidation after local place/status mutations. Customer Flutter owns the direct owner-scoped `orders` Realtime subscription.
+The employee access token remains HttpOnly by design. React does not receive/expose a Supabase staff JWT for Realtime. The order board uses TanStack Query against `/api/v1/orders` at 2.5-second intervals with immediate invalidation after place/status mutations. Customer Flutter owns the direct owner-scoped `orders` Realtime subscription.
 
 ## Shared frontend design constraint
 

@@ -1,90 +1,51 @@
 # Active Context
 
-**As of:** 2026-08-13
-**Current implementation task:** `TASK-AUTH-005 — preview/live Admin session-loop regression`
-**Current task verdict:** COMPLETE for the bounded dashboard regression
+**As of:** 2026-08-14
+**Current implementation task:** `TASK-CLOSEOUT-001 — complete current AIDA implementation tranche`
+**Current dashboard verdict:** implementation complete; live cross-client order E2E pending approved runtime credentials
 
-## TASK-AUTH-005 result
+## Accepted closeout evidence
 
-With `VITE_UI_PREVIEW_MODE=true`, the local preview Manager identity was stored only in session storage and had no real Supabase employee cookie session. Members and Admin Catalogue still called privileged live BFF routes. Their `401 EMPLOYEE_SESSION_REQUIRED` responses caused the shared `employeeFetch()` handler to clear the preview identity; ProtectedRoute redirected to Admin Login, while preview refresh restored the identity and Admin Login returned to the requested route. This produced a repeatable Members/Menu ↔ Login loop.
+The following physical/manual paths are current project evidence and supersede earlier zero-identity blockers:
 
-Preview and live sessions are now explicitly separated at that failure boundary. Live BFF 401s clear only real employee-session state, while preview identity remains local and non-authoritative. ProtectedRoute is the sole route-level session-refresh owner; Admin Login observes session state rather than issuing a duplicate refresh.
+- a fresh Android release APK was installed on a physical phone;
+- customer sign-up succeeded and Supabase provisioned Auth/profile/member state;
+- the new customer appeared in Dashboard Members;
+- a real Owner signed into the local Admin dashboard;
+- that Owner changed a catalogue price through Admin Menu;
+- the installed customer app observed the changed price.
 
-In preview mode, Members remains mounted, performs no privileged member request, fabricates no member rows/counts, and explains that a real AIDA Admin session is required. Menu reads the real public published catalogue from `/api/v1/catalogue` in read-only mode with Add/Edit/write controls unavailable. Live mode retains `/api/v1/admin/members`, `/api/v1/admin/catalogue`, HttpOnly employee cookies, caller JWT and RLS-backed writes unchanged.
+Fresh read-only Supabase evidence collected on 2026-08-14:
 
-The loop was reproduced before editing and proven absent afterward in the browser and Playwright. Dashboard lint, strict typecheck, 22 Vitest files / 99 tests, production build, bundle safety assertion, and 7 Playwright tests pass.
+- Auth users: **9**;
+- `user_profiles`: **9**;
+- members: **6**;
+- trusted roles: **1 owner, 1 admin, 1 staff**;
+- orders: **0** at the closeout baseline;
+- catalogue revision: **15**.
 
-## Current product reality
+These counts are dated evidence, not permanent invariants. Employee identities are not member/loyalty records. The trusted demo employees are `owner.evelyn.demo@aida.test`, `admin.marcus.demo@aida.test`, and `staff.nora.demo@aida.test`.
 
-The shared Supabase identity/member, catalogue, ordering and scheduling foundations remain live and authoritative. Customer ordering frontend integration is implemented on the current stack; dashboard order-board/POS transaction frontend integration remains a later task.
+## Current tranche status
 
-TASK-AUTH-004 addresses two local-demo failures reported against the current stack:
+- Identity/member provisioning and live Admin Members: complete and physically validated.
+- Same-origin HttpOnly employee/Admin session: complete; real Owner login validated.
+- Shared catalogue/Admin Menu/POS catalogue: complete; Owner mutation to installed-phone refresh validated.
+- TASK-AUTH-005 preview/live separation: complete; preview identity remains non-authoritative and no Members/Menu login oscillation occurs.
+- Authoritative order/scheduling backend: complete with canonical transactional integration evidence.
+- Customer quote/place/history/status frontend: implemented on the coordinated customer stack according to mirrored implementation evidence.
+- Dashboard POS order frontend: implemented in TASK-CLOSEOUT-001. Cart state submits IDs/intent only; server quote total is rendered; POS place is idempotent; ASAP/scheduled pickup uses server policy; successful persistence is required before clearing the sale; payment wording is explicitly `Pay at counter`/unpaid; the live order rail polls the BFF and sends versioned legal transitions.
 
-1. customer signup rendered a generic Auth failure and recent attempts could not be correlated to a created live Auth identity;
-2. Dashboard Members/Menu briefly rendered a loading state and then disappeared because the protected route correctly resolved the browser as anonymous and redirected away without preserving useful destination/diagnostic context.
+The remaining closeout proof is a fresh live customer-place → dashboard-observe/transition → customer-authorized-refresh journey. This checkout has no approved account passwords in repository or environment state, so source work must not invent credentials or reset durable demo accounts.
 
-## Live Supabase evidence
+## Security and deployment
 
-Project: `Aida System` / `eswovqxqzfevcdwwcmuh` / `ap-southeast-1`.
+The dashboard retains ADR-0008: HttpOnly employee cookies, caller JWT forwarded only by the BFF, same-origin POST enforcement, no browser bearer-token persistence, and no service-role credential.
 
-Fresh live checks on 2026-08-13 show:
+Supabase security advisor reports one hosted Auth warning: `auth_leaked_password_protection` / **Leaked Password Protection Disabled**. It is project-level operational configuration; source code must not fabricate a fix or claim zero findings.
 
-- Auth users: **0**;
-- trusted admin/owner profiles: **0**;
-- no profile/member exists for an Auth identity because no Auth identity currently exists;
-- existing `auth.users` provisioning trigger remains enabled;
-- `handle_new_auth_user()` remains a `SECURITY DEFINER` function owned by `postgres`;
-- member-code generation remains server-owned;
-- Supabase security advisor remains at **0 lints**.
+Hosted/Vercel deployment remains **DEFERRED**. It is not a merge blocker for the accepted local-PC + cloud-Supabase + installed-phone demo tranche, and it must not be called complete until separately proven.
 
-Therefore Members/Menu cannot be authorized until a real Supabase Auth identity exists and its trusted `user_profiles.app_role` is `admin` or `owner`. The fix must not make member data anonymous, bypass `ProtectedRoute`, expose a staff bearer token, or use a service-role key in browser/mobile code.
+## Deferred product domains
 
-## TASK-AUTH-004 source fixes
-
-Shared branch in both repositories:
-
-`codex/task-auth-004-runtime-access-fix`
-
-It is stacked on `codex/fix-auth-signup-diagnostics`, which is stacked on the current order-task branch.
-
-### Customer Flutter
-
-`apps/customer/lib/main.dart` now has the active AIDA project URL and **publishable** Supabase key as safe public defaults. `--dart-define` remains an override, but installed demo builds no longer depend on a fragile missing/stale build-time key. No service-role/secret key is embedded.
-
-`SupabaseMemberRepository` continues mapping common Auth failures to user-safe messages. Unrecognized `AuthException` messages are now normalized, capped, and surfaced in the UI instead of being erased behind the generic `Authentication failed / check account settings` message. This is intentionally diagnostic until the real hosted Auth response is observed on the rebuilt phone app.
-
-### Dashboard
-
-`vite.config.ts` now supplies the same AIDA project URL and publishable key as local BFF defaults, with explicit environment values taking precedence. This removes `.env` presence as an unnecessary local-demo dependency while preserving the same-origin BFF and caller-JWT model.
-
-`ProtectedRoute` still fails closed. When an Admin page is selected without a valid employee session it now redirects to `/admin/login` with the intended Admin destination and the session error code.
-
-`AdminLoginPage` now:
-
-- explains that Members/Menu require an Admin/owner sign-in;
-- preserves the selected Admin destination and returns there after successful authentication;
-- surfaces configuration/network/access/disabled/credential failures distinctly instead of always showing `Invalid administrator credentials`.
-
-No member/catalogue RLS policy or privileged BFF authorization check was weakened.
-
-## Bootstrap attempt
-
-A narrowly scoped temporary Edge Function was deployed only to investigate supported server-side Auth Admin bootstrapping. The available tool runtime could deploy but could not invoke arbitrary function URLs, so **no user was created**. The function was immediately replaced by a disabled version returning HTTP 410. It is not an active bootstrap capability.
-
-No direct SQL insert into `auth.users` was performed.
-
-## Existing trusted order/catalogue state
-
-The shared catalogue remains 4 categories / 16 items / 27 variants / 27 compatible add-on links. Authoritative ordering/scheduling remains live under ADR-0010, with customer quote/place/history/status integration already present in Flutter. Dashboard order BFF endpoints remain available; React order-board/POS transaction integration is still pending.
-
-## Required validation / remaining gate
-
-Source changes cannot prove the phone/device path from this connector-only runtime. The next validation must use the actual local checkouts:
-
-1. pull `codex/task-auth-004-runtime-access-fix` in both repos;
-2. rebuild/install the Flutter app from `apps/customer` so the new public config and diagnostic mapper are definitely in the binary;
-3. attempt signup and capture the exact Supabase Auth reason if it still fails;
-4. once a real Auth identity exists, promote only the intended operator identity to trusted `admin`/`owner` through the database/operator boundary;
-5. log into `/admin/login`, then verify Members and Menu return to the originally selected route and load through the caller-JWT BFF/RLS path.
-
-Until a real identity exists and these local-device flows pass, TASK-AUTH-004 remains `PARTIAL`.
+Real payment settlement/refunds, loyalty authority, inventory depletion, promotions/discount engine, tax/accounting, revenue reporting, delivery, branch capacity/hours, and branch-scoped operations remain outside this tranche.

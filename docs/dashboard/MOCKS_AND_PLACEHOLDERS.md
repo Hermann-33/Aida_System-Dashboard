@@ -6,19 +6,19 @@ Updated: 2026-08-13
 
 Admin Menu categories/items/prices/publication/availability/variants/add-on compatibility come from the shared Supabase catalogue through the BFF. POS menu/category cards and modifier choices use the same shared snapshot. `PREVIEW_MENU`, `PREVIEW_CATEGORIES` and `PREVIEW_MODIFIER_GROUPS` are not runtime catalogue authority.
 
-## Order/POS placeholders that must now be replaced by frontend integration
+## Order/POS preview authority removed from the active path
 
-The authoritative order/scheduling backend is live, so these runtime concepts can remain only as temporary UI interaction state—not trusted persistence/business truth:
+The active POS placement and Orders rail no longer use the following as trusted persistence/business truth:
 
 - client-computed POS cart/order totals shown as if final;
 - preview/local order records standing in for persisted orders;
 - preview order-number generation;
 - fake checkout completion/tender/payment success;
 - local-only order lifecycle/status;
-- absence of the live Scheduled/Confirmed/Preparing/Ready staff queue;
-- absence of server-policy-backed ASAP/Schedule-for-later placement.
+- preview orders as queue fallback;
+- fake status progression or local completion authority.
 
-Codex must connect the existing POS surfaces to `/api/v1/orders/*` without redesigning the application.
+The existing POS surfaces are connected to `/api/v1/orders/*` without redesigning the application.
 
 ## Allowed local UI state after integration
 

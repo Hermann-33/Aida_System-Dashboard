@@ -1,6 +1,6 @@
 # Supabase Status
 
-**Status date:** 2026-08-13
+**Status date:** 2026-08-14
 **Project:** Aida System
 **Ref:** `eswovqxqzfevcdwwcmuh`
 **Region:** `ap-southeast-1`
@@ -15,11 +15,14 @@ Existing identity/member objects remain live with forced RLS:
 
 Trusted role helpers and admin/owner member-directory functions remain unchanged.
 
-Current live identity count after TASK-DEMO-ORDER-001 regression cleanup:
+Closeout evidence (dated snapshot, not an invariant):
 
-- Auth users: 0
-- profiles: 0
-- members: 0
+- Auth users: 9
+- profiles: 9
+- members: 6
+- trusted roles: 1 owner, 1 admin, 1 staff
+
+The member population is five seeded customers plus one physically created test customer. Employee identities are intentionally not member/loyalty rows.
 
 ## Catalogue — TASK-MENU-001
 
@@ -38,7 +41,9 @@ Seed baseline remains:
 - 16 items
 - 27 variants
 - 27 compatible add-on links
-- catalogue revision 1
+- catalogue revision 15 at the closeout baseline
+
+The latest audit includes a real Owner mutation performed by `owner.evelyn.demo@aida.test`; the changed price was observed by the installed customer app.
 
 Catalogue authority and regression behavior are unchanged by TASK-DEMO-ORDER-001.
 
@@ -85,7 +90,7 @@ maximum_advance_days     7
 
 Branch-specific opening hours/closures/capacity are not modeled in the current schema.
 
-Current retained order state after regression rollback:
+Current retained order state at the 2026-08-14 closeout baseline:
 
 - orders: 0
 - order lines: 0
@@ -126,7 +131,7 @@ It proved:
 - stale/illegal transition rejection;
 - admin-only scheduling policy update.
 
-Security advisor after both migrations: **0 lints**.
+The order migration regression previously passed with no schema/RLS lint. The current project security advisor reports one hosted Auth WARN: `auth_leaked_password_protection` (**Leaked Password Protection Disabled**). Do not describe the current project as having zero security-advisor findings.
 
 Performance advisor initially identified four unindexed new foreign keys. The second forward migration added covering indexes. Final performance findings are `unused_index` INFO only, which is expected on a new/empty order dataset; there are no remaining unindexed-FK findings.
 

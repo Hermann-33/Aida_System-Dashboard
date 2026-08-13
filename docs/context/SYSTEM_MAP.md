@@ -1,6 +1,6 @@
 # System Map
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
 | System | Runtime | Current trusted source |
 |---|---|---|
@@ -56,6 +56,8 @@ POS cart selections
 
 The browser's preview/local cart remains selection state only. Persisted price/total/order identity comes from the backend.
 
+The integrated dashboard renders the returned quote total, keeps one `clientRequestId` across retry of the same placement, clears the sale only after persisted success, and labels the current non-processor flow `Pay at counter`/unpaid.
+
 ## Scheduled pickup
 
 ```text
@@ -90,14 +92,11 @@ Legal flow is `confirmed|scheduled -> preparing -> ready -> completed`, with can
 
 Because employee JWTs remain HttpOnly, the React dashboard must not expose a staff token to connect directly to Supabase Realtime. For the current demo it should poll/refetch the same-origin `/api/v1/orders` queue at a short safe interval and invalidate immediately after local mutations. Customer Flutter can use owner-scoped Supabase Realtime directly.
 
+The Orders rail implements that model with a 2.5-second TanStack Query interval, immediate invalidation after place/status mutations, legal next actions only, and conflict refetch on `ORDER_VERSION_CONFLICT`.
+
 ## Deployment state
 
-Vercel project `aida-system-dashboard` exists and source builds there, but the current preview BFF is not operational until an operator configures:
-
-- `AIDA_SUPABASE_URL`
-- `AIDA_SUPABASE_PUBLISHABLE_KEY`
-
-A service-role key remains prohibited from Vite/browser code. Local dashboard + cloud Supabase + installed customer app can be used for demo/E2E once approved staff/customer identities exist.
+Hosted deployment remains **DEFERRED** and is not a blocker for the accepted local-PC + cloud-Supabase + installed-phone demo tranche. Do not claim hosted BFF operation until its runtime configuration and routes are independently proven. A service-role key remains prohibited from Vite/browser code.
 
 ## Deferred authority
 

@@ -1,5 +1,19 @@
 # Audit Log
 
+## 2026-08-14 — TASK-CLOSEOUT-001 dashboard tranche closeout
+
+**Verdict:** PARTIAL pending one credential-bound live cross-client order journey.
+
+Accepted current evidence replaces stale zero-identity claims: physical Android release signup provisioned a real customer/member visible in Dashboard Members; a real Owner logged into the local dashboard and changed catalogue price; the installed phone observed that change. Fresh read-only Supabase evidence is 9 Auth users, 9 profiles, 6 members, roles 1 owner/1 admin/1 staff, 0 baseline orders and catalogue revision 15.
+
+Implemented the missing React order frontend over the existing BFF: selection-only quote payload, server-authoritative total, stable idempotent placement retry, ASAP/server-policy scheduled pickup, Pay-at-counter/unpaid wording, persisted order receipt, 2.5-second live queue polling, versioned legal transitions, conflict refetch and no preview-order fallback. TASK-AUTH-005 behavior remains covered.
+
+Security scan found no new privileged credential or browser bearer-token persistence. Supabase security advisor currently reports one hosted Auth WARN, `auth_leaked_password_protection`; zero-finding claims were removed. Hosted deployment remains DEFERRED and is not a local-demo merge blocker.
+
+`npm audit` initially reported 1 moderate and 4 high advisories, including the direct React Router advisory. A lockfile-respecting non-major `npm audit fix` updated five packages; the final audit reports 0 vulnerabilities.
+
+The final fresh customer placement → Dashboard transition → customer authorized refresh proof could not run because approved account passwords are absent from repository/environment state. No identity was invented, no durable password was reset, no service role was used, and no order was directly inserted with SQL.
+
 ## 2026-08-13 — TASK-AUTH-005 preview/live Admin session loop
 
 **Verdict:** COMPLETE for the bounded dashboard regression.

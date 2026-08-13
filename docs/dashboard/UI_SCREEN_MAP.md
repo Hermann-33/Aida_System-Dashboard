@@ -6,7 +6,7 @@ Scope: `Hermann-33/Aida_System-Dashboard`.
 |---|---|---|---|
 | `/employee` | anonymous/staff/admin | terminal enrolment and employee sign-in | preview roster/terminal repo; planned API adapters |
 | `/employee/select-role` | dual-role admin | choose POS or Admin workspace | current employee session |
-| `/pos` | staff / enabled dual-role admin | full counter workspace | shared catalogue browse/configuration; cart/order/payment remains local preview with no durable order backend |
+| `/pos` | staff / enabled dual-role admin | full counter workspace | shared catalogue; server quote/place; ASAP/scheduled pickup; live polled order queue/status; Pay at counter/unpaid; other POS domains remain preview |
 | `/unauthorized` | denied identity | access-denied boundary | route-guard state |
 | `/admin` | admin | executive KPIs/operations | derived preview transactions/terminals/shifts |
 | `/admin/reports/sales` | admin | sales/product/payment/void/refund/staff/branch reporting | preview aggregates; export disabled |

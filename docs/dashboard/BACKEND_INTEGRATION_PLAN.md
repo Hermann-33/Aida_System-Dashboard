@@ -1,6 +1,6 @@
 # POS/Admin Backend Integration Plan
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
 ## Deployment/Auth boundary
 
@@ -12,7 +12,7 @@ For local demo/frontend work, the dashboard can run locally against the same clo
 
 Admin Menu uses the shared catalogue BFF for trusted management. POS browsing uses the same published catalogue for categories, availability, base display prices, per-item variants and compatible add-ons. There is no runtime preview-catalogue fallback.
 
-## Orders and scheduled pickup — BFF ready, React integration next
+## Orders and scheduled pickup — integrated
 
 ADR-0010 and `docs/contracts/ORDER_AND_SCHEDULING_CONTRACT.md` are authoritative.
 
@@ -28,7 +28,7 @@ New same-origin endpoints:
 
 All employee mutations validate the existing HttpOnly employee session, forward the caller JWT to Supabase and require same origin. No service-role credential or browser-readable employee JWT is part of the integration.
 
-### POS integration
+### POS integration (implemented)
 
 1. Keep current POS cart/customization interaction as **selection state**.
 2. Build quote payloads from shared catalogue item/variant/add-on IDs, quantities and notes only.
@@ -42,7 +42,7 @@ All employee mutations validate the existing HttpOnly employee session, forward 
 
 Current POS placement is a guest-order boundary. Do not invent customer/member association from browser input in this frontend task.
 
-### Live staff order board
+### Live staff order board (implemented)
 
 Use `/api/v1/orders` as the queue source and display the persisted statuses:
 
@@ -61,11 +61,11 @@ Handle `ORDER_VERSION_CONFLICT` (HTTP 409) by refetching the order/queue and tel
 
 The employee JWT intentionally remains HttpOnly, so React cannot safely open a caller-authenticated Supabase Realtime channel without breaking ADR-0008.
 
-For this demo frontend:
+The current demo frontend:
 
-- use TanStack Query/the existing query layer against `/api/v1/orders`;
-- use a short, reasonable refetch interval such as 2–3 seconds while the order board is active;
-- invalidate/refetch immediately after local place/status mutations;
+- uses TanStack Query against `/api/v1/orders`;
+- refetches every 2.5 seconds while the board is active;
+- invalidates/refetches immediately after local place/status mutations;
 - do not expose or copy the employee access token into browser JavaScript merely for Realtime.
 
 Customer Flutter uses direct owner-scoped `orders` Realtime, so staff status updates still appear immediately on the customer side.

@@ -1,125 +1,60 @@
 # Current Handoff
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
-## Current task
+## Task
 
-`TASK-AUTH-005 — preview/live Admin session-loop regression`
+`TASK-CLOSEOUT-001 — complete current AIDA implementation tranche`
 
-**Verdict:** COMPLETE for the bounded dashboard regression.
+Dashboard branch: `codex/task-closeout-001-tranche-completion`
 
-Branch: `codex/task-auth-005-preview-live-session-loop`, stacked on `codex/task-auth-004-runtime-access-fix`.
+Dashboard PR: #12, targeting `main`, kept draft until every cross-client gate passes.
 
-## Reproduction and fix
+## Completed dashboard implementation
 
-On the untouched AUTH-005 base with UI preview enabled, Siti Manager could open Admin, but Members and Menu alternated with `/admin/login`. The privileged endpoints and the employee session probe returned `401 EMPLOYEE_SESSION_REQUIRED`; preview login had created only the local preview identity, not HttpOnly Supabase employee cookies.
+The POS now uses the existing ADR-0010 order BFF rather than creating a second backend:
 
-The global 401 handler no longer destroys preview identity. ProtectedRoute owns route-level refresh and Admin Login only observes state. Preview Members makes no privileged request and displays the real-Admin requirement. Preview Menu reads `/api/v1/catalogue` and is read-only; no preview catalogue fixture or Admin mutation request is used. Live Admin endpoint, cookie, caller-JWT and RLS behavior is unchanged.
+- typed `/api/v1/orders/*` client through `employeeFetch` and HttpOnly cookies;
+- cart-to-contract mapping sends item/variant/add-on IDs, quantity and optional note only;
+- server quote total is rendered as authority; local total is labelled estimate;
+- ASAP and scheduled pickup are derived from the server policy;
+- one `clientRequestId` survives retry of the same placement attempt;
+- cart/fulfilment state remains after quote/place failure and clears only after persisted success;
+- persisted server order UUID/number/total/status are displayed;
+- active commercial wording is `Pay at counter`/unpaid, with no fake settlement;
+- live queue polls at 2.5 seconds, never falls back to preview transactions, and invalidates after mutations;
+- legal next transitions submit the current `statusVersion` and refetch on HTTP 409 conflict;
+- terminal states expose no mutation controls.
 
-Verification: lint passed with two existing Fast Refresh warnings; typecheck passed; 22 Vitest files / 99 tests passed; build and no-legacy-token assertion passed with the existing bundle-size warning; 7/7 Playwright tests passed; `git diff --check` passed.
+TASK-AUTH-005 remains intact: preview Members makes no privileged request, preview Menu reads the public live catalogue read-only, and live BFF 401 does not destroy preview identity.
 
-## Remaining identity gate
+## Current live evidence
 
-Live Supabase still has zero Auth users and zero trusted admin/owner profiles. A real Admin/owner must still be created and promoted through the approved Auth/operator boundary before live Members or catalogue mutations can succeed. Preview Manager identity does not satisfy or weaken that gate.
+Dated 2026-08-14, not permanent invariants:
 
-## Previous AUTH-004 handoff
+- Auth users 9; profiles 9; members 6;
+- roles: owner 1, admin 1, staff 1;
+- orders 0 at baseline; catalogue revision 15;
+- physical Android release signup provisioned a member visible in Dashboard Members;
+- real Owner login succeeded locally;
+- Owner Admin Menu price mutation propagated to the installed customer app;
+- Android release networking/signup path is validated.
 
-Shared branch in both repositories:
+Employee identities are not loyalty/member rows.
 
-`codex/task-auth-004-runtime-access-fix`
+## Remaining gate
 
-Stack:
+A fresh live customer-place → Dashboard observe/preparing/ready/completed → customer authorized refresh run was not executable from repository/environment state because no approved account passwords are available. Do not invent an Auth user, reset durable demo passwords, use service role, or insert an order directly with SQL.
 
-`codex/task-demo-order-001-order-scheduling-backend`
-→ `codex/fix-auth-signup-diagnostics`
-→ `codex/task-auth-004-runtime-access-fix`
+Acceptable next execution: inject approved customer and staff/Admin demo credentials ephemerally, run the supported customer placement RPC/client boundary and Dashboard UI/BFF transitions, then remove/retain only a clearly labelled demo order according to product preference.
 
-Do not merge the stack out of order.
+## Security/deployment
 
-## Problem reproduced from current evidence
+- No service-role/secret or browser employee bearer token is used.
+- Current Supabase advisor: one WARN, `auth_leaked_password_protection`.
+- Hosted deployment: **DEFERRED**, not a local-demo merge blocker.
+- Payment, loyalty, inventory, reporting, tax, delivery and branch capacity remain deferred.
 
-### Customer
+## Customer mirror delta
 
-The installed phone app still showed the generic Auth fallback. Fresh Supabase checks showed zero Auth users and no corresponding live identity/member row. The connector Auth log did not provide a recent signup event to correlate, so the old binary could not reveal the actual hosted Auth reason.
-
-### Dashboard
-
-Members/Menu are protected Admin routes. `ProtectedRoute` performs a server session refresh; with no authenticated Admin session it correctly redirects away after the initial loading state. The live project currently has zero Auth users and zero trusted admin/owner profiles, so there is no valid identity that can satisfy that route today.
-
-This is not a reason to make Members public or bypass the route guard.
-
-## Changes on this branch
-
-### Customer repo
-
-- `apps/customer/lib/main.dart`
-  - active AIDA Supabase URL remains the default;
-  - active AIDA **publishable** key is now also a safe public default;
-  - explicit `--dart-define` values can still override both;
-  - no service-role/secret key is present.
-- `apps/customer/lib/data/repository/supabase_member_repository.dart`
-  - known Auth errors retain explicit mapping;
-  - unknown `AuthException` messages are normalized/capped and shown so the next physical-device attempt exposes the real upstream reason.
-
-### Dashboard repo
-
-- `vite.config.ts`
-  - local BFF receives the active AIDA URL/publishable key by default;
-  - explicit env values override defaults;
-  - no service-role/secret key.
-- `src/auth/ProtectedRoute.tsx`
-  - still fail-closed;
-  - redirects unauthenticated Admin navigation to `/admin/login` with selected destination + session error context.
-- `src/pages/AdminLoginPage.tsx`
-  - tells the operator why Members/Menu require Admin sign-in;
-  - returns to the originally selected Admin route after successful login;
-  - distinguishes credentials, authorization, disabled-account, local BFF config and network errors.
-
-## Supabase status
-
-Fresh live state on 2026-08-13:
-
-- Auth users: 0
-- admin/owner profiles: 0
-- security advisor: 0 lints
-- provisioning trigger/function/member-code authority unchanged
-
-No direct `auth.users` SQL insert was used.
-
-A temporary exact-account Admin-API bootstrap Edge Function was deployed for investigation, but the tool environment could not invoke the public function URL. No user was created. The function was immediately superseded by a disabled HTTP-410 version.
-
-## Required local validation
-
-### Customer
-
-From the customer checkout:
-
-1. fetch/switch/pull `codex/task-auth-004-runtime-access-fix`;
-2. `cd apps/customer`;
-3. run `flutter pub get`, `flutter analyze`, `flutter test`;
-4. rebuild/install the app on the physical Android phone;
-5. attempt signup again.
-
-If signup still fails, report the **new exact Auth text**. Do not report only the old generic message; that means the phone is still running an older binary.
-
-### Dashboard
-
-From the dashboard checkout:
-
-1. fetch/switch/pull `codex/task-auth-004-runtime-access-fix`;
-2. `npm ci`;
-3. `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`;
-4. restart `npm run dev`;
-5. select Members or Menu.
-
-Expected behavior without an identity: explicit redirect to Admin sign-in, not an unexplained disappearing tab.
-
-Expected behavior after a trusted Admin/owner identity exists: sign in once, then return to the selected Members/Menu route and load through the existing caller-JWT BFF/RLS path.
-
-## Identity bootstrap gate
-
-The remaining blocker is a real Auth identity. Once customer signup succeeds (or an Auth user is created through the Supabase Auth Admin surface), the intended operator can be promoted through the trusted DB/operator boundary to `admin`/`owner`. Do not allow public signup metadata or a browser request to self-assign that role.
-
-## Next product task after AUTH-004 validation
-
-Resume the dashboard half of `TASK-DEMO-ORDER-001`: authoritative POS quote/place plus the live Scheduled/Confirmed/Preparing/Ready order board and status transitions. Keep payment, loyalty, inventory and reporting authority out of scope until the order flow closes end to end.
+Mirror the 2026-08-14 live counts/evidence, current security-advisor WARN, Android physical validation, catalogue physical E2E, dashboard authoritative order frontend status, deferred deployment status, and remaining credential-bound cross-client order E2E into the customer repository governance set. Do not copy dashboard-local implementation file maps into customer-local docs.

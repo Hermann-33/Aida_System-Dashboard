@@ -1,8 +1,8 @@
 # AIDA Café Security Review
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
-**Verdict:** identity, catalogue, and new order/scheduling authority are hardened at the backend boundary; overall demo feature remains `PARTIAL` until frontend integration and real-identity E2E.
+**Verdict:** identity, catalogue and order/scheduling authority are hardened across the dashboard boundary; one fresh credential-bound cross-client order E2E remains before tranche closeout.
 
 ## Existing identity/catalogue controls
 
@@ -118,7 +118,14 @@ The following remain separate trusted domains:
 ## Remaining release/E2E gates
 
 - Flutter/frontend integration must remove local random order numbers, local-only order authority, fake payment completion, and timer-driven status progression.
-- Dashboard frontend must use server quote/place/queue/status endpoints rather than preview totals/order records as authority.
-- Real approved customer/staff/admin identities are still absent.
-- Existing Vercel preview still lacks its publishable Supabase runtime variables.
-- Cross-client customer placement -> dashboard status -> customer Realtime UI proof remains outstanding under ADR-0004.
+- Dashboard active POS now uses server quote/place/queue/status endpoints rather than preview totals/order records as authority.
+- Approved real identities exist (9 Auth users; 1 owner, 1 admin, 1 staff; 6 members at the 2026-08-14 baseline), but their passwords are not repository/environment data and must not be invented.
+- Physical Android signup → Dashboard Members and Owner catalogue mutation → installed-phone refresh are validated.
+- Hosted deployment remains DEFERRED, not complete.
+- A fresh credential-backed customer placement → dashboard status → customer authorized refresh proof remains outstanding under ADR-0004.
+
+## Current advisor state
+
+The Supabase security advisor reports one WARN: `auth_leaked_password_protection` / **Leaked Password Protection Disabled**. This is hosted Auth configuration debt, not a reason to weaken Auth or fabricate a source-code fix. Current documentation must not claim zero advisor findings.
+
+The 2026-08-14 npm closeout audit initially reported 1 moderate and 4 high dependency advisories. Compatible lockfile updates remediated them without a major dependency upgrade; the final npm audit reports 0 vulnerabilities.

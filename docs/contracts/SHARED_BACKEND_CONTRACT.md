@@ -1,6 +1,6 @@
 # Shared Backend Contract
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
 ## Authority
 
@@ -114,6 +114,8 @@ Current order BFF endpoints:
 - `POST /api/v1/orders/place`
 - `POST /api/v1/orders/status`
 - `POST /api/v1/admin/orders/policy`
+
+Dashboard React now consumes these endpoints through a typed adapter. Its active POS path sends catalogue IDs/quantity/note plus fulfilment intent, renders the quote response as authority, reuses a stable `clientRequestId` for retry, and clears local cart state only after persisted placement. The order board polls the employee queue every 2.5 seconds and submits `expectedVersion` for legal status transitions. `PREVIEW_TRANSACTIONS` and preview receipts are not live order authority.
 
 ## Payment boundary
 
