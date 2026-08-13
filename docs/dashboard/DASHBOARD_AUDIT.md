@@ -1,46 +1,31 @@
 # POS/Admin Dashboard Audit
 
-## Current-state note — 2026-08-14
+Updated current-state note: 2026-08-14
 
-The original source audit below is historical baseline evidence, not current product status. Current project truth is in `docs/context/ACTIVE_CONTEXT.md`, `CLOSEOUT_EVIDENCE_2026-08-14.md`, `SUPABASE_STATUS.md`, `ROADMAP.md` and the accepted ADR/contracts.
+This file preserves the existence of earlier Dashboard source audits without treating their old measurements as current product truth. Current authority/status is maintained in `docs/context/ACTIVE_CONTEXT.md`, `SYSTEM_MAP.md`, `SUPABASE_STATUS.md`, `ROADMAP.md`, `CLOSEOUT_EVIDENCE_2026-08-14.md` and the accepted ADR/contracts.
 
-Material changes since the original audit:
+## Material changes since the early preview audits
 
-- real Owner/Admin/Staff identities now exist;
-- same-origin employee/Admin BFF sessions are implemented;
-- protected Admin Members is live and a physical Android signup has been observed there;
-- shared Admin/POS catalogue integration is live and a real Owner price mutation propagated to the installed Android customer app;
-- TASK-AUTH-005 fixed the preview/live Admin session-loop regression;
-- authoritative order/scheduling backend and Dashboard order BFF/API endpoints are implemented;
-- customer Flutter authoritative order integration is implemented;
-- Dashboard React authoritative POS quote/place/order-board/status integration remains TASK-CLOSEOUT-001 work;
-- current Supabase security advisor has one hosted Auth configuration warning rather than a current zero-finding result.
+- Real Owner/Admin/Staff test identities now exist.
+- The protected employee/Admin application boundary is implemented.
+- Protected Members is live and a physical Android customer creation has been observed there.
+- Shared Admin/POS catalogue integration is live and a real Owner price change propagated to the installed Android customer app.
+- TASK-AUTH-005 fixed the preview/live navigation regression.
+- Authoritative order/scheduling backend and Dashboard order endpoints are implemented.
+- Customer Flutter authoritative ordering is implemented.
+- Dashboard React authoritative POS quote/place/order-board/status integration remains TASK-CLOSEOUT-001 work.
+- Current security-advisor state is recorded in `SUPABASE_STATUS.md` and `SECURITY_REVIEW.md`; historical zero-finding results are date-specific evidence only.
 
-Do not use historical zero-identity/revision-1 statements as current evidence.
+## Historical audit scope
 
----
+Earlier Dashboard audits documented a broad preview frontend with local/fixture operational data, simulated transaction/payment/approval behavior, non-durable orders/shifts/cash moves, session-local management state and preview reporting/loyalty data.
 
-## Historical source audit
+Those observations remain useful history for understanding what has been replaced. They must not override current repo evidence.
 
-**Repository:** `Hermann-33/Aida_System-Dashboard`
-**Historical verdict:** broad preview frontend; not fully backend-connected or production-transactional at the time of the source audit.
+Current placeholder truth is maintained in `docs/dashboard/MOCKS_AND_PLACEHOLDERS.md`. Current integration work is maintained in `docs/dashboard/BACKEND_INTEGRATION_PLAN.md` and TASK-CLOSEOUT-001 context/handoff.
 
-### Runtime baseline
+## Current closeout interpretation
 
-React 19, TypeScript, Vite, React Router, Tailwind, component primitives, TanStack Query, Vitest and Playwright with npm lockfile.
+The Dashboard is no longer accurately described as “not backend-connected.” Trusted employee access, Members, catalogue and the order server boundary are integrated. The remaining major live transaction gap is the React POS/order frontend plus final cross-client order E2E.
 
-### Major surfaces
-
-- Employee access, terminal enrolment and role selection.
-- POS sale/cart/modifiers/member lookup/rewards/payments/receipts/orders/shifts/terminal/help.
-- Admin overview, sales/transactions/member reports, branches/locations, terminals, shifts, employees/access, menu/catalogue, inventory, loyalty, marketing, audit, integrations and settings.
-
-### Historical preview behavior
-
-At the original audit, most operational data came from fixtures, component/module memory or session storage. Critical non-authoritative behavior included local receipt/order IDs, simulated payment state, preview manager approval, non-durable orders/shifts/cash moves/held tickets, session-only Admin mutations and fixture reporting/loyalty data.
-
-Later tasks have replaced some but not all of those boundaries. Current placeholder truth is maintained in `MOCKS_AND_PLACEHOLDERS.md` and the current task/status docs.
-
-### Historical verification
-
-Earlier audit/test passes remain historical evidence only. Current live counts, current security-advisor state and current integration coverage are documented in the 2026-08-14 closeout files.
+Do not use old zero-identity, revision-1, missing-backend or historical test-count statements as current status.
