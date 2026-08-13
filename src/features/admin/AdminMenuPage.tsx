@@ -5,18 +5,22 @@ import { Link, useNavigate } from 'react-router-dom';
 import { formatRmFromSen } from '../../shared/formatting/money';
 import {
   fetchAdminCatalogue,
+  fetchPublishedCatalogue,
   saveCatalogueCategory,
   saveCatalogueItem,
+  type CatalogueSnapshot,
 } from '../catalogue/catalogueClient';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdminPageShell } from './AdminPageShell';
 import './admin.css';
+import { isUiPreviewMode } from '../../preview/uiPreviewMode';
 
 type Tab = 'items' | 'categories' | 'variants';
 
 const ADMIN_CATALOGUE_QUERY = ['admin-catalogue'] as const;
 
 export function AdminMenuPage() {
+  const preview = isUiPreviewMode();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>('items');
@@ -30,9 +34,9 @@ export function AdminMenuPage() {
   const [categoryName, setCategoryName] = useState('');
   const [error, setError] = useState('');
 
-  const catalogue = useQuery({
-    queryKey: ADMIN_CATALOGUE_QUERY,
-    queryFn: fetchAdminCatalogue,
+  const catalogue = useQuery<CatalogueSnapshot>({
+    queryKey: preview ? ['public-catalogue'] : ADMIN_CATALOGUE_QUERY,
+    queryFn: () => preview ? fetchPublishedCatalogue() : fetchAdminCatalogue(),
   });
 
   const items = catalogue.data?.items ?? [];
@@ -121,12 +125,17 @@ export function AdminMenuPage() {
       title="Menu management"
       hint="This catalogue is shared with the customer app. Published changes invalidate the app catalogue revision automatically."
       actions={
-        <button type="button" className="btn-primary" onClick={openAddDialog} disabled={!categories.length}>
+        preview ? undefined : <button type="button" className="btn-primary" onClick={openAddDialog} disabled={!categories.length}>
           <Plus size={16} aria-hidden="true" />
           Add item
         </button>
       }
     >
+      {preview && (
+        <div className="empty-state" role="status">
+          <p>UI Preview is showing the live published catalogue in read-only mode. A real AIDA Admin session is required to change menu data.</p>
+        </div>
+      )}
       {catalogue.isPending && <p className="form-hint">Loading shared catalogue…</p>}
       {catalogue.isError && (
         <div className="empty-state" role="alert">
@@ -158,7 +167,7 @@ export function AdminMenuPage() {
                   <th>Route</th>
                   <th>Published</th>
                   <th>Available</th>
-                  <th />
+                  {!preview && <th />}
                 </tr>
               </thead>
               <tbody>
@@ -187,11 +196,11 @@ export function AdminMenuPage() {
                     <td>{item.prepRoute}</td>
                     <td>{item.isPublished ? 'Yes' : 'No'}</td>
                     <td>{item.isAvailable ? 'Yes' : 'No'}</td>
-                    <td>
+                    {!preview && <td>
                       <Link to={`/admin/catalogue/menu/${item.id}`} className="btn-secondary btn-sm">
                         Edit
                       </Link>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
@@ -202,9 +211,9 @@ export function AdminMenuPage() {
           <TabsContent value="categories">
             <div className="admin-section-heading-row">
               <p className="form-hint">Category order and visibility are shared with the customer app.</p>
-              <button type="button" className="btn-secondary" onClick={() => { setError(''); setCategoryOpen(true); }}>
+              {!preview && <button type="button" className="btn-secondary" onClick={() => { setError(''); setCategoryOpen(true); }}>
                 <Plus size={15} aria-hidden="true" /> Add category
-              </button>
+              </button>}
             </div>
             <table className="data-table admin-table">
               <thead>
@@ -256,7 +265,7 @@ export function AdminMenuPage() {
         </Tabs>
       )}
 
-      {addOpen && (
+      {!preview && addOpen && (
         <div className="confirm-dialog-overlay" role="presentation" onClick={closeAddDialog}>
           <div className="confirm-dialog confirm-dialog--wide" role="dialog" aria-labelledby="add-item-title" onClick={(event) => event.stopPropagation()}>
             <h2 id="add-item-title" className="admin-section-title">Add menu item</h2>
@@ -304,7 +313,7 @@ export function AdminMenuPage() {
         </div>
       )}
 
-      {categoryOpen && (
+      {!preview && categoryOpen && (
         <div className="confirm-dialog-overlay" role="presentation" onClick={() => setCategoryOpen(false)}>
           <div className="confirm-dialog" role="dialog" aria-labelledby="add-category-title" onClick={(event) => event.stopPropagation()}>
             <h2 id="add-category-title" className="admin-section-title">Add category</h2>

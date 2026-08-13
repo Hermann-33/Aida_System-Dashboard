@@ -1,8 +1,18 @@
 # Active Context
 
 **As of:** 2026-08-13
-**Current implementation task:** `TASK-AUTH-004 — customer Auth runtime + dashboard protected Admin access`
-**Current task verdict:** PARTIAL
+**Current implementation task:** `TASK-AUTH-005 — preview/live Admin session-loop regression`
+**Current task verdict:** COMPLETE for the bounded dashboard regression
+
+## TASK-AUTH-005 result
+
+With `VITE_UI_PREVIEW_MODE=true`, the local preview Manager identity was stored only in session storage and had no real Supabase employee cookie session. Members and Admin Catalogue still called privileged live BFF routes. Their `401 EMPLOYEE_SESSION_REQUIRED` responses caused the shared `employeeFetch()` handler to clear the preview identity; ProtectedRoute redirected to Admin Login, while preview refresh restored the identity and Admin Login returned to the requested route. This produced a repeatable Members/Menu ↔ Login loop.
+
+Preview and live sessions are now explicitly separated at that failure boundary. Live BFF 401s clear only real employee-session state, while preview identity remains local and non-authoritative. ProtectedRoute is the sole route-level session-refresh owner; Admin Login observes session state rather than issuing a duplicate refresh.
+
+In preview mode, Members remains mounted, performs no privileged member request, fabricates no member rows/counts, and explains that a real AIDA Admin session is required. Menu reads the real public published catalogue from `/api/v1/catalogue` in read-only mode with Add/Edit/write controls unavailable. Live mode retains `/api/v1/admin/members`, `/api/v1/admin/catalogue`, HttpOnly employee cookies, caller JWT and RLS-backed writes unchanged.
+
+The loop was reproduced before editing and proven absent afterward in the browser and Playwright. Dashboard lint, strict typecheck, 22 Vitest files / 99 tests, production build, bundle safety assertion, and 7 Playwright tests pass.
 
 ## Current product reality
 

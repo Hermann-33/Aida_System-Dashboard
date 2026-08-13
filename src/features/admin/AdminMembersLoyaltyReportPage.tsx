@@ -5,17 +5,26 @@ import { formatRmFromSen } from '../../shared/formatting/money';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdminPageShell } from './AdminPageShell';
 import { fetchAdminMembers, type AdminMember } from './memberDirectory';
+import { isUiPreviewMode } from '../../preview/uiPreviewMode';
 import './admin.css';
 
 type Tab = 'members' | 'rewards';
 
 export function AdminMembersLoyaltyReportPage() {
+  const preview = isUiPreviewMode();
   const [tab, setTab] = useState<Tab>('members');
   const [members, setMembers] = useState<AdminMember[]>([]);
-  const [membersLoading, setMembersLoading] = useState(true);
+  const [membersLoading, setMembersLoading] = useState(!preview);
   const [membersError, setMembersError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (preview) {
+      setMembers([]);
+      setMembersLoading(false);
+      setMembersError(null);
+      return;
+    }
+
     let cancelled = false;
 
     async function loadMembers() {
@@ -40,7 +49,7 @@ export function AdminMembersLoyaltyReportPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [preview]);
 
   const activeCount = useMemo(
     () => members.filter((member) => member.isActive).length,
@@ -65,17 +74,22 @@ export function AdminMembersLoyaltyReportPage() {
         </TabsList>
 
         <TabsContent value="members">
+          {preview && (
+            <div className="empty-state" role="status">
+              <p>Live member data requires a real AIDA Admin session. UI Preview sign-in does not authorize the live member directory.</p>
+            </div>
+          )}
           <p className="form-hint">
             Server-issued member identities. No points, stamps, roles, or verification outcomes are fabricated in this view.
           </p>
 
-          <div className="metric-grid metric-grid--compact">
+          {!preview && <div className="metric-grid metric-grid--compact">
             <MetricCard label="Total members" value={membersLoading ? '—' : String(members.length)} />
             <MetricCard label="Active members" value={membersLoading ? '—' : String(activeCount)} />
             <MetricCard label="Student verification pending" value={membersLoading ? '—' : String(pendingStudentCount)} />
-          </div>
+          </div>}
 
-          {membersLoading ? (
+          {!preview && (membersLoading ? (
             <p className="form-hint">Loading members…</p>
           ) : membersError ? (
             <p className="form-hint" role="alert">{membersError}</p>
@@ -108,7 +122,7 @@ export function AdminMembersLoyaltyReportPage() {
                 ))}
               </tbody>
             </table>
-          )}
+          ))}
         </TabsContent>
 
         <TabsContent value="rewards">

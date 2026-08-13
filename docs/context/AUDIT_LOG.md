@@ -1,5 +1,15 @@
 # Audit Log
 
+## 2026-08-13 — TASK-AUTH-005 preview/live Admin session loop
+
+**Verdict:** COMPLETE for the bounded dashboard regression.
+
+Reproduced before editing with `VITE_UI_PREVIEW_MODE=true`: preview Siti Manager opened Admin, then Members and Menu repeatedly oscillated with `/admin/login`. `GET /api/v1/admin/members`, `GET /api/v1/admin/catalogue`, and `GET /api/v1/auth/employee/session` returned HTTP 401 / `EMPLOYEE_SESSION_REQUIRED`; public `GET /api/v1/catalogue` returned 200. Source and runtime evidence showed preview identity persisted locally without a valid HttpOnly employee session, the shared 401 handler cleared in-memory identity, and duplicate route/login refresh ownership restored it and navigated back into the next 401.
+
+Separated preview failure handling from the real employee session. Preview BFF 401s no longer clear preview identity; real `EMPLOYEE_SESSION_EXPIRED` still clears live state. ProtectedRoute is the route refresh owner. Preview Members stays mounted with no privileged request or fabricated member data. Preview Menu uses the public live catalogue in read-only mode and exposes no write controls; live mode retains privileged Admin endpoints and mutations.
+
+Post-fix browser sampling stayed continuously on Members and Menu with the expected messages, live Latte catalogue, no write controls, and no browser warnings/errors. Validation passed: lint (two existing warnings), typecheck, 22 Vitest files / 99 tests, production build + bundle assertion, 7 Playwright tests, and `git diff --check`. No Supabase, RLS, cookie architecture, service-role policy, order frontend, or customer repository change was made.
+
 ## 2026-08-13 — TASK-AUTH-004 — Customer Auth runtime + protected Admin access
 
 **Verdict:** PARTIAL pending physical-device signup and a real trusted Admin identity.

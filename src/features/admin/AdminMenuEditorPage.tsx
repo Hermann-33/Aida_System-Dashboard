@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router-dom';
 import { formatRmFromSen } from '../../shared/formatting/money';
 import {
   fetchAdminCatalogue,
+  fetchPublishedCatalogue,
   saveCatalogueItem,
   type CatalogueItem,
   type CatalogueSnapshot,
@@ -12,16 +13,18 @@ import {
 } from '../catalogue/catalogueClient';
 import { AdminPageShell } from './AdminPageShell';
 import './admin.css';
+import { isUiPreviewMode } from '../../preview/uiPreviewMode';
 
 const ADMIN_CATALOGUE_QUERY = ['admin-catalogue'] as const;
 
 type DraftVariant = Omit<CatalogueVariant, 'id'> & { id?: string };
 
 export function AdminMenuEditorPage() {
+  const preview = isUiPreviewMode();
   const { id = '' } = useParams();
-  const catalogue = useQuery({
-    queryKey: ADMIN_CATALOGUE_QUERY,
-    queryFn: fetchAdminCatalogue,
+  const catalogue = useQuery<CatalogueSnapshot>({
+    queryKey: preview ? ['public-catalogue'] : ADMIN_CATALOGUE_QUERY,
+    queryFn: () => preview ? fetchPublishedCatalogue() : fetchAdminCatalogue(),
   });
 
   if (catalogue.isPending) {
@@ -55,10 +58,10 @@ export function AdminMenuEditorPage() {
     );
   }
 
-  return <LoadedMenuEditor key={`${item.id}:${catalogue.data.revision}`} item={item} catalogue={catalogue.data} />;
+  return <LoadedMenuEditor key={`${item.id}:${catalogue.data.revision}`} item={item} catalogue={catalogue.data} readOnly={preview} />;
 }
 
-function LoadedMenuEditor({ item, catalogue }: { item: CatalogueItem; catalogue: CatalogueSnapshot }) {
+function LoadedMenuEditor({ item, catalogue, readOnly }: { item: CatalogueItem; catalogue: CatalogueSnapshot; readOnly: boolean }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState(item.name);
   const [sku, setSku] = useState(item.sku);
@@ -185,7 +188,13 @@ function LoadedMenuEditor({ item, catalogue }: { item: CatalogueItem; catalogue:
       hint={`Editing ${item.name} (${item.sku}) · catalogue revision ${catalogue.revision}`}
       actions={<Link to="/admin/catalogue/menu" className="btn-secondary">Back to list</Link>}
     >
+      {readOnly && (
+        <div className="empty-state" role="status">
+          <p>UI Preview can inspect the live published catalogue only. A real AIDA Admin session is required to edit menu data.</p>
+        </div>
+      )}
       <form className="admin-form" onSubmit={onSubmit}>
+        <fieldset disabled={readOnly} className="contents">
         <label>
           Display name
           <input value={name} onChange={(event) => setName(event.target.value)} required />
@@ -251,7 +260,7 @@ function LoadedMenuEditor({ item, catalogue }: { item: CatalogueItem; catalogue:
             <h2 className="admin-section-title">Variants / sizes</h2>
             <p className="form-hint">Price deltas are stored in sen and sent to the customer app with this item.</p>
           </div>
-          <button type="button" className="btn-secondary" onClick={addVariant}><Plus size={15} aria-hidden="true" /> Add variant</button>
+          {!readOnly && <button type="button" className="btn-secondary" onClick={addVariant}><Plus size={15} aria-hidden="true" /> Add variant</button>}
         </div>
 
         {variants.map((variant, index) => (
@@ -275,7 +284,7 @@ function LoadedMenuEditor({ item, catalogue }: { item: CatalogueItem; catalogue:
                 <label className="admin-checkbox"><input type="radio" name="default-variant" checked={variant.isDefault} onChange={() => updateVariant(index, { isDefault: true })} />Default</label>
                 <label className="admin-checkbox"><input type="checkbox" checked={variant.isAvailable} onChange={(event) => updateVariant(index, { isAvailable: event.target.checked })} />Available</label>
               </div>
-              <button type="button" className="btn-secondary" onClick={() => removeVariant(index)} aria-label={`Remove ${variant.label || 'variant'}`}><Trash2 size={15} /></button>
+              {!readOnly && <button type="button" className="btn-secondary" onClick={() => removeVariant(index)} aria-label={`Remove ${variant.label || 'variant'}`}><Trash2 size={15} /></button>}
             </div>
           </div>
         ))}
@@ -297,9 +306,10 @@ function LoadedMenuEditor({ item, catalogue }: { item: CatalogueItem; catalogue:
 
         {error && <p role="alert" className="form-error">{error}</p>}
         {message && <p role="status" className="form-hint">{message}</p>}
-        <button type="submit" className="btn-primary" disabled={save.isPending}>
+        {!readOnly && <button type="submit" className="btn-primary" disabled={save.isPending}>
           {save.isPending ? 'Saving…' : 'Save catalogue item'}
-        </button>
+        </button>}
+        </fieldset>
       </form>
     </AdminPageShell>
   );

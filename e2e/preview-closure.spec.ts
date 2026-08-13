@@ -74,6 +74,43 @@ test.describe('Preview closure gate (no backend)', () => {
     expect(hits).toEqual([]);
   });
 
+  test('preview Manager keeps Admin routes mounted without privileged-session loops', async ({ page }) => {
+    const privilegedRequests: string[] = [];
+    const responseStatuses = new Map<string, number>();
+    page.on('request', (request) => {
+      const path = new URL(request.url()).pathname;
+      if (path === '/api/v1/admin/members' || path === '/api/v1/admin/catalogue') {
+        privilegedRequests.push(path);
+      }
+    });
+    page.on('response', (response) => {
+      const path = new URL(response.url()).pathname;
+      if (path.startsWith('/api/v1/')) responseStatuses.set(path, response.status());
+    });
+
+    await enrolPreview(page);
+    await login(page, 'siti');
+    await expect(page).toHaveURL(/\/admin$/);
+
+    await page.goto('/admin/reports/members');
+    await expect(page).toHaveURL(/\/admin\/reports\/members$/);
+    await expect(page.getByText(/live member data requires a real aida admin session/i)).toBeVisible();
+    await page.waitForTimeout(750);
+    await expect(page).toHaveURL(/\/admin\/reports\/members$/);
+
+    await page.goto('/admin/catalogue/menu');
+    await expect(page).toHaveURL(/\/admin\/catalogue\/menu$/);
+    await expect(page.getByText(/live published catalogue in read-only mode/i)).toBeVisible();
+    await expect(page.getByText('Latte').first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: /add item/i })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /edit/i })).toHaveCount(0);
+    await page.waitForTimeout(750);
+    await expect(page).toHaveURL(/\/admin\/catalogue\/menu$/);
+
+    expect(privilegedRequests).toEqual([]);
+    expect(responseStatuses.get('/api/v1/catalogue')).toBe(200);
+  });
+
   test('dual-role requires explicit workspace selection', async ({ page }) => {
     await enrolPreview(page);
     await login(page, 'amir');

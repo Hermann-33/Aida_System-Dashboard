@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   getEmployeeSession,
   loginWithPassword,
   logoutEmployee,
-  refreshEmployeeSessionFromServer,
+  subscribeEmployeeSession,
 } from '../auth/employeeSession';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,14 +60,17 @@ export function AdminLoginPage() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const session = useSyncExternalStore(
+    subscribeEmployeeSession,
+    getEmployeeSession,
+    getEmployeeSession,
+  );
 
   useEffect(() => {
-    void refreshEmployeeSessionFromServer().then((session) => {
-      if (session.status === 'authenticated' && session.identity?.role === 'admin') {
-        navigate(destination, { replace: true });
-      }
-    });
-  }, [destination, navigate]);
+    if (session.status === 'authenticated' && session.identity?.role === 'admin') {
+      navigate(destination, { replace: true });
+    }
+  }, [destination, navigate, session]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();

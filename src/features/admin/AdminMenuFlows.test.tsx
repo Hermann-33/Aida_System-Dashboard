@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   fetchAdminCatalogue,
+  fetchPublishedCatalogue,
   saveCatalogueCategory,
   saveCatalogueItem,
   type CatalogueSnapshot,
@@ -12,11 +13,18 @@ import {
 import { AdminMenuEditorPage } from './AdminMenuEditorPage';
 import { AdminMenuPage } from './AdminMenuPage';
 
+const runtimeMode = vi.hoisted(() => ({ preview: false }));
+
+vi.mock('../../preview/uiPreviewMode', () => ({
+  isUiPreviewMode: () => runtimeMode.preview,
+}));
+
 vi.mock('../catalogue/catalogueClient', async (importOriginal) => {
   const original = await importOriginal<typeof import('../catalogue/catalogueClient')>();
   return {
     ...original,
     fetchAdminCatalogue: vi.fn(),
+    fetchPublishedCatalogue: vi.fn(),
     saveCatalogueCategory: vi.fn(),
     saveCatalogueItem: vi.fn(),
   };
@@ -63,9 +71,35 @@ function renderRoute(initialEntry: string) {
 describe('Admin shared catalogue flows', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    runtimeMode.preview = false;
     vi.mocked(fetchAdminCatalogue).mockResolvedValue(catalogue);
+    vi.mocked(fetchPublishedCatalogue).mockResolvedValue(catalogue);
     vi.mocked(saveCatalogueCategory).mockResolvedValue('seasonal');
     vi.mocked(saveCatalogueItem).mockResolvedValue('temporary-item');
+  });
+
+  it('uses the public live catalogue without write controls in preview mode', async () => {
+    runtimeMode.preview = true;
+    renderRoute('/admin/catalogue/menu');
+
+    expect(await screen.findByText('Latte')).toBeInTheDocument();
+    expect(fetchPublishedCatalogue).toHaveBeenCalledTimes(1);
+    expect(fetchAdminCatalogue).not.toHaveBeenCalled();
+    expect(screen.getByText(/live published catalogue in read-only mode/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /add item/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /edit/i })).not.toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Categories' }));
+    expect(screen.queryByRole('button', { name: /add category/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the privileged Admin catalogue endpoint in live mode', async () => {
+    renderRoute('/admin/catalogue/menu');
+
+    expect(await screen.findByText('Latte')).toBeInTheDocument();
+    expect(fetchAdminCatalogue).toHaveBeenCalledTimes(1);
+    expect(fetchPublishedCatalogue).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /add item/i })).toBeInTheDocument();
   });
 
   it('creates a category and a temporary item through the shared catalogue client', async () => {

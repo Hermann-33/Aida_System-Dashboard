@@ -127,7 +127,7 @@ export async function employeeFetch(input: RequestInfo | URL, init: RequestInit 
     headers,
   });
 
-  if (res.status === 401) {
+  if (res.status === 401 && !isUiPreviewMode()) {
     const body = await res.clone().json().catch(() => ({}));
     const code = body?.code || 'EMPLOYEE_SESSION_EXPIRED';
     if (code === 'EMPLOYEE_SESSION_EXPIRED' || code === 'EMPLOYEE_SESSION_REQUIRED') {

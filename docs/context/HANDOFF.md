@@ -4,9 +4,25 @@ Updated: 2026-08-13
 
 ## Current task
 
-`TASK-AUTH-004 — customer Auth runtime + dashboard protected Admin access`
+`TASK-AUTH-005 — preview/live Admin session-loop regression`
 
-**Overall verdict:** PARTIAL.
+**Verdict:** COMPLETE for the bounded dashboard regression.
+
+Branch: `codex/task-auth-005-preview-live-session-loop`, stacked on `codex/task-auth-004-runtime-access-fix`.
+
+## Reproduction and fix
+
+On the untouched AUTH-005 base with UI preview enabled, Siti Manager could open Admin, but Members and Menu alternated with `/admin/login`. The privileged endpoints and the employee session probe returned `401 EMPLOYEE_SESSION_REQUIRED`; preview login had created only the local preview identity, not HttpOnly Supabase employee cookies.
+
+The global 401 handler no longer destroys preview identity. ProtectedRoute owns route-level refresh and Admin Login only observes state. Preview Members makes no privileged request and displays the real-Admin requirement. Preview Menu reads `/api/v1/catalogue` and is read-only; no preview catalogue fixture or Admin mutation request is used. Live Admin endpoint, cookie, caller-JWT and RLS behavior is unchanged.
+
+Verification: lint passed with two existing Fast Refresh warnings; typecheck passed; 22 Vitest files / 99 tests passed; build and no-legacy-token assertion passed with the existing bundle-size warning; 7/7 Playwright tests passed; `git diff --check` passed.
+
+## Remaining identity gate
+
+Live Supabase still has zero Auth users and zero trusted admin/owner profiles. A real Admin/owner must still be created and promoted through the approved Auth/operator boundary before live Members or catalogue mutations can succeed. Preview Manager identity does not satisfy or weaken that gate.
+
+## Previous AUTH-004 handoff
 
 Shared branch in both repositories:
 
