@@ -1,39 +1,62 @@
 # Roadmap
 
-Updated: 2026-08-14
+Updated: 2026-08-17
 
 ## Current tranche
 
-Implemented:
+Implemented and validated to the current closeout standard:
 
-- trusted identity/member provisioning and live Admin Members;
-- same-origin HttpOnly employee/Admin BFF;
-- shared catalogue read/Admin mutation and revision invalidation;
-- preview/live session separation (TASK-AUTH-005);
+- governance and shared-backend ownership;
+- trusted identity/member foundation;
+- customer Supabase Auth/member integration and physical signup;
+- same-origin employee/Admin session boundary;
+- protected Dashboard Members;
+- shared catalogue, protected Admin mutation, POS/customer reads and customer revision refresh;
+- TASK-AUTH-005 preview/live session separation;
+- Android release networking and reproducible committed build toolchain;
 - authoritative quote/order/schedule/status backend;
-- customer authoritative order frontend on the coordinated customer stack;
-- dashboard authoritative POS quote/place, ASAP/scheduled pickup, live polled order queue and versioned fulfilment transitions;
-- Android release INTERNET/network fix and physical signup/member validation;
-- physical Owner catalogue mutation → installed-phone refresh validation.
+- customer authoritative quote/place/history/detail/status frontend;
+- Dashboard authoritative POS quote/place and server-policy scheduling;
+- Dashboard live polled order queue and versioned fulfilment transitions;
+- customer and Dashboard full local toolchain/test/build gates for the implemented tranche.
 
-The remaining TASK-CLOSEOUT-001 gate is a fresh supported customer placement → Dashboard observation/transitions → customer authorized status refresh using approved account credentials. Source and test code must not manufacture or commit those credentials.
+## Current status
 
-## Deployment
+`TASK-CLOSEOUT-001`: **PARTIAL** only because the fresh credential-backed cross-client order lifecycle has not yet been executed against the live project.
 
-Hosted/Vercel deployment is **DEFERRED** operational debt. It is not a blocker for the accepted local-PC + cloud-Supabase + installed-phone tranche and must not be labelled complete without direct deployment evidence.
+Required final proof:
+
+customer placement
+→ persisted order
+→ Dashboard observation
+→ preparing
+→ customer authorized refresh
+→ ready
+→ customer authorized refresh
+→ completed
+→ customer authorized refresh.
+
+Approved demo credentials must be supplied ephemerally and must not be committed.
+
+## Merge gate
+
+Customer PR #13 and Dashboard PR #12 are technically mergeable but remain draft until the final live order E2E is recorded and mirrored documentation/final merge-readiness checks pass.
+
+Hosted/Vercel deployment is **DEFERRED** for the accepted local-PC + cloud-Supabase + installed-phone demo topology.
 
 ## Security operations
 
-Enable Supabase Auth leaked-password protection through the hosted project configuration when operational ownership permits. Current security advisor state is one WARN: `auth_leaked_password_protection`.
+Current Supabase security-advisor evidence has one WARN: leaked-password protection is disabled. Enabling it is hosted Auth configuration work and does not justify weakening application Auth/RLS boundaries.
 
 ## Deferred product domains
 
 Do not start these during closeout:
 
-- trusted payment capture/refunds;
-- loyalty earning/redemption;
-- inventory depletion;
-- promotions/discount engine;
-- tax/accounting and revenue reporting;
-- delivery;
-- branch opening hours, capacity and branch-scoped order queues.
+1. trusted payment capture/refunds;
+2. loyalty earning/redemption and voucher lifecycle;
+3. inventory/recipes/depletion;
+4. promotions/discount authority;
+5. tax/accounting and trusted reporting;
+6. branch-scoped staff/order visibility and branch hours/capacity;
+7. delivery;
+8. hosted production deployment, signing/distribution and operational release work.
