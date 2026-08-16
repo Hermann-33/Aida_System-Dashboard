@@ -1,5 +1,17 @@
 # Audit Log
 
+## 2026-08-17 — TASK-CLOSEOUT-001 final live order E2E
+
+**Verdict:** COMPLETE for Dashboard implementation and applicable ADR-0004 live validation.
+
+Using approved credentials only through process-local environment variables, a real customer authenticated with trusted `app_role=customer` and an active member. The public catalogue selected the currently published/available Sandwich item with no required variant/add-on. `quote_order` returned an authoritative ASAP total of 1,290 sen, and `place_customer_order` persisted order `100006` (`7cf027dc-3ff0-4604-a3fd-c7a943aac603`) as `confirmed` version 1.
+
+A real Owner authenticated through the Dashboard same-origin HttpOnly BFF. `GET /api/v1/orders` observed the exact UUID, order number, total, status and version. Versioned BFF transitions persisted `preparing` version 2, `ready` version 3 and `completed` version 4; the customer's authorized `get_order` RPC observed each changed state. Dashboard detail and the final all-status queue confirmed the terminal record. The live retained-order count is now 1.
+
+Final Dashboard checks passed: lint with the two established Fast Refresh warnings, strict typecheck, 25 Vitest files / 111 tests, production build plus legacy-token assertion, Playwright 8/8, `npm audit` with 0 vulnerabilities and `git diff --check`. The local Admin login rendered without console errors.
+
+No service role, direct SQL order insertion, password reset, client-trusted price/status, browser employee bearer-token persistence or credential-bearing repository file was used. The four E2E credential variables were removed after authenticated work. The hosted leaked-password-protection WARN remains open and hosted deployment remains DEFERRED.
+
 ## 2026-08-14 — TASK-CLOSEOUT-001 dashboard tranche closeout
 
 **Verdict:** PARTIAL pending one credential-bound live cross-client order journey.

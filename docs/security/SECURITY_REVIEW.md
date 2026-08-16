@@ -1,8 +1,8 @@
 # AIDA Café Security Review
 
-Updated: 2026-08-14
+Updated: 2026-08-17
 
-**Verdict:** identity, catalogue and order/scheduling authority are hardened across the dashboard boundary; one fresh credential-bound cross-client order E2E remains before tranche closeout.
+**Verdict:** identity, catalogue and order/scheduling authority are hardened across the dashboard boundary; the credential-bound cross-client order E2E passes.
 
 ## Existing identity/catalogue controls
 
@@ -93,9 +93,11 @@ Canonical `supabase/tests/order_integration.sql` passed transactionally and prov
 - legal/stale/terminal transition enforcement;
 - cleanup leaves zero synthetic identities/orders/events.
 
-Supabase security advisor after both order migrations: **0 lints**.
+At TASK-DEMO-ORDER-001 migration-validation time, the schema/RLS advisor returned **0 lints**. The current hosted project advisor state is not zero findings: it has the leaked-password-protection WARN described below.
 
 Performance advisor's initial four unindexed-FK INFO findings were resolved with a forward migration; final findings are only unused-index INFO expected on the empty/new dataset.
+
+The 2026-08-17 live E2E authenticated a real customer/member through Supabase Auth and a real Owner through the Dashboard HttpOnly BFF. Customer placement derived identity/member server-side and trusted only catalogue IDs/quantity/note. Dashboard status mutations used the same-origin BFF and expected status versions. Customer-owned reads observed `preparing`, `ready` and `completed`; the Dashboard observed the identical server record. No service role, direct SQL insert, password reset, browser employee token persistence or credential-bearing repository file was used. Ephemeral credential variables were removed after the run.
 
 ## Explicitly untrusted / deferred
 
@@ -115,14 +117,14 @@ The following remain separate trusted domains:
 - branch scheduling hours/capacity
 - delivery
 
-## Remaining release/E2E gates
+## Release/E2E status
 
-- Flutter/frontend integration must remove local random order numbers, local-only order authority, fake payment completion, and timer-driven status progression.
+- Flutter/frontend authoritative order integration and Android reproducible build gates are complete for the current tranche.
 - Dashboard active POS now uses server quote/place/queue/status endpoints rather than preview totals/order records as authority.
-- Approved real identities exist (9 Auth users; 1 owner, 1 admin, 1 staff; 6 members at the 2026-08-14 baseline), but their passwords are not repository/environment data and must not be invented.
+- Approved real identities exist (9 Auth users; 1 owner, 1 admin, 1 staff; 6 members at the 2026-08-14 baseline); demo credentials remain external ephemeral test inputs and are not repository data.
 - Physical Android signup → Dashboard Members and Owner catalogue mutation → installed-phone refresh are validated.
+- Customer placement → Dashboard observation/versioned transitions → customer authorized status refresh is validated with retained order `100006` (`7cf027dc-3ff0-4604-a3fd-c7a943aac603`).
 - Hosted deployment remains DEFERRED, not complete.
-- A fresh credential-backed customer placement → dashboard status → customer authorized refresh proof remains outstanding under ADR-0004.
 
 ## Current advisor state
 

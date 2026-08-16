@@ -99,6 +99,17 @@ Current retained order state at the 2026-08-14 closeout baseline:
 
 The numeric identity sequence may contain gaps after transactional regression because PostgreSQL sequences are non-transactional; order-number uniqueness/authority is unaffected and no synthetic order row remains.
 
+Final live E2E evidence on 2026-08-17 supersedes only the retained-order count, not the dated identity/catalogue baseline:
+
+- retained orders: 1;
+- order `100006` / `7cf027dc-3ff0-4604-a3fd-c7a943aac603`;
+- customer source, ASAP fulfilment, authoritative total 1,290 sen;
+- persisted lifecycle `confirmed` v1 → `preparing` v2 → `ready` v3 → `completed` v4;
+- customer-owned `get_order` reads observed every changed status;
+- Dashboard Owner BFF queue/detail reads observed the same persisted record.
+
+The order remains intentionally retained as TASK-CLOSEOUT-001 evidence. It was created through `place_customer_order`, not SQL or service-role access.
+
 ## Realtime
 
 `supabase_realtime` currently publishes exactly the two intended mutable signals:

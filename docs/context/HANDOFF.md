@@ -18,7 +18,7 @@ Integration PRs:
 
 Both are draft and technically mergeable.
 
-**Verdict:** PARTIAL — all implementation/toolchain gates are closed; one live cross-client order E2E gate remains.
+**Verdict:** COMPLETE — all implementation, live cross-client E2E and Dashboard toolchain gates are closed.
 
 ## Closed implementation gates
 
@@ -60,28 +60,20 @@ Dated 2026-08-14:
 
 Current advisor evidence: one WARN for leaked-password protection being disabled. Hosted deployment remains DEFERRED for the accepted local-PC → cloud-Supabase → installed-phone workflow.
 
-## Only remaining closeout action
+## Final live order evidence
 
-Run one credential-backed supported order lifecycle using approved demo accounts supplied ephemerally:
+On 2026-08-17 the approved customer authenticated with an active member, quoted a live published Sandwich at 1,290 sen and placed ASAP order `100006` (`7cf027dc-3ff0-4604-a3fd-c7a943aac603`) through `place_customer_order`.
 
-1. authenticate as a real customer/member;
-2. place through the supported customer ordering boundary;
-3. observe the persisted order in the Dashboard queue;
-4. transition it to preparing;
-5. confirm the customer authorized read/refetch observes preparing;
-6. transition to ready;
-7. confirm the customer observes ready;
-8. transition to completed;
-9. confirm the customer observes completed.
+The real Owner authenticated through the same-origin HttpOnly Dashboard BFF. The queue observed the exact persisted order, then the BFF persisted `confirmed` v1 → `preparing` v2 → `ready` v3 → `completed` v4. The customer's authorized `get_order` read observed preparing, ready and completed. The final all-status queue contained one retained order: this completed E2E record.
 
-Do not commit credentials, reset durable demo passwords, use service role, or insert an order directly with SQL.
+Credentials remained process-local and were removed after authenticated work. No service role, direct SQL order insert, password reset or employee bearer-token persistence was used.
 
-## After that run
+## Final coordination action
 
-- record the order E2E evidence in both mirrored governance sets;
-- rerun final diff/status/secret/security and PR mergeability checks;
-- change both PR titles from `[PARTIAL]` only if every gate remains green;
-- mark both PRs ready for review;
+- apply the mirror delta to the customer governance set;
+- independently verify both PRs and their final diffs;
+- change both PR titles from `[PARTIAL]` only after that cross-repository verification;
+- mark both PRs ready for review only after that verification;
 - merge the coordinated integration PRs rather than the old stacked task PRs;
 - close/supersede obsolete draft PRs after successful integration.
 

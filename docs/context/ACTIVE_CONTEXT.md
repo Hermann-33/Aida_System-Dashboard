@@ -2,7 +2,7 @@
 
 **As of:** 2026-08-17
 **Current task:** `TASK-CLOSEOUT-001 — complete and close the current AIDA implementation tranche`
-**Current verdict:** PARTIAL — implementation is complete; one live cross-client order E2E gate remains.
+**Current verdict:** COMPLETE — implementation, live cross-client order E2E and Dashboard verification gates pass.
 
 ## Current product reality
 
@@ -77,20 +77,19 @@ COMPLETE for the current tranche:
 
 Dashboard validation: lint PASS with two existing Fast Refresh warnings, typecheck PASS, 25 Vitest files / 111 tests PASS, build PASS, Playwright 8/8 PASS, `git diff --check` PASS, and final `npm audit` 0 vulnerabilities.
 
-## Remaining closeout gate
+## Final live order E2E
 
-The only remaining ADR-0004 gate is a fresh supported live order journey:
+Completed on 2026-08-17 through supported public/customer and Dashboard BFF boundaries using ephemeral approved demo credentials:
 
-customer authoritative placement
-→ persisted Supabase order
-→ Dashboard queue observation
-→ staff preparing
-→ staff ready
-→ customer authorized refresh observes changed persisted status
-→ staff completed
-→ customer authorized refresh observes completion.
+- customer Auth and active-member validation passed;
+- live published Sandwich catalogue item quoted for ASAP pickup at an authoritative total of 1,290 sen;
+- customer `place_customer_order` persisted order `100006` (`7cf027dc-3ff0-4604-a3fd-c7a943aac603`) as `confirmed`, version 1;
+- the authenticated Owner Dashboard queue observed the same UUID, order number, total, status and version;
+- Dashboard transitions persisted `preparing` version 2, `ready` version 3 and `completed` version 4;
+- the customer's authorized `get_order` read observed each persisted status;
+- the final all-status Dashboard queue contained exactly one retained order, the completed E2E order.
 
-Use approved demo credentials only through ephemeral runtime input. Do not commit passwords, reset durable demo credentials, use service role, or insert an order directly with SQL.
+No service role, direct SQL order insertion, password reset, client-trusted price/status, or browser employee bearer-token persistence was used. The credential variables were process-local and removed after authenticated work.
 
 ## Security and deployment
 
@@ -103,7 +102,7 @@ Hosted/Vercel deployment remains **DEFERRED**. The accepted current demo topolog
 - Customer PR #13 → `master`: draft, mergeable.
 - Dashboard PR #12 → `main`: draft, mergeable.
 
-Both remain draft until the final live order E2E is recorded, mirrored docs are reconciled after that run, and final merge-readiness checks pass.
+Both remain draft pending ChatGPT's independent cross-repository mirror and final PR verification. The Dashboard implementation and applicable ADR-0004 E2E gates are closed.
 
 ## Deferred product domains
 

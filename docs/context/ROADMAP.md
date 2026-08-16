@@ -22,9 +22,9 @@ Implemented and validated to the current closeout standard:
 
 ## Current status
 
-`TASK-CLOSEOUT-001`: **PARTIAL** only because the fresh credential-backed cross-client order lifecycle has not yet been executed against the live project.
+`TASK-CLOSEOUT-001`: **COMPLETE** for implementation and applicable ADR-0004 validation.
 
-Required final proof:
+Live proof completed on 2026-08-17:
 
 customer placement
 → persisted order
@@ -36,11 +36,11 @@ customer placement
 → completed
 → customer authorized refresh.
 
-Approved demo credentials must be supplied ephemerally and must not be committed.
+The retained evidence is order `100006` (`7cf027dc-3ff0-4604-a3fd-c7a943aac603`), authoritative total 1,290 sen, completed at status version 4. Approved demo credentials were process-local, were not committed and were removed after the run.
 
 ## Merge gate
 
-Customer PR #13 and Dashboard PR #12 are technically mergeable but remain draft until the final live order E2E is recorded and mirrored documentation/final merge-readiness checks pass.
+Customer PR #13 and Dashboard PR #12 remain draft pending independent cross-repository mirror and final PR verification. The live order E2E no longer blocks merge readiness.
 
 Hosted/Vercel deployment is **DEFERRED** for the accepted local-PC + cloud-Supabase + installed-phone demo topology.
 
