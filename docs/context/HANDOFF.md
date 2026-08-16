@@ -6,6 +6,8 @@ Updated: 2026-08-17
 
 `TASK-CLOSEOUT-001 — complete and close the current AIDA implementation tranche`
 
+**Verdict:** COMPLETE.
+
 Coordinated branches:
 
 - customer: `codex/task-closeout-001-tranche-completion`
@@ -16,9 +18,7 @@ Integration PRs:
 - customer PR #13 → `master`
 - dashboard PR #12 → `main`
 
-Both are draft and technically mergeable.
-
-**Verdict:** COMPLETE — all implementation, live cross-client E2E and Dashboard toolchain gates are closed.
+Both implementation branches are independently verified mergeable. Their titles no longer carry `[PARTIAL]`.
 
 ## Closed implementation gates
 
@@ -45,9 +45,9 @@ Both are draft and technically mergeable.
 - lint/typecheck/25 Vitest files with 111 tests/build/8 Playwright tests/diff check pass;
 - final `npm audit` reports 0 vulnerabilities.
 
-## Last verified backend evidence
+## Current backend evidence
 
-Dated 2026-08-14:
+Independently rechecked on 2026-08-17:
 
 - 9 Auth users;
 - 9 profiles;
@@ -55,26 +55,27 @@ Dated 2026-08-14:
 - 1 owner;
 - 1 admin;
 - 1 staff;
-- 0 retained orders at baseline;
-- catalogue revision 15.
+- catalogue revision 15;
+- 1 retained completed order.
 
-Current advisor evidence: one WARN for leaked-password protection being disabled. Hosted deployment remains DEFERRED for the accepted local-PC → cloud-Supabase → installed-phone workflow.
+Current security-advisor evidence: one WARN for leaked-password protection being disabled. Hosted deployment remains DEFERRED for the accepted local-PC → cloud-Supabase → installed-phone workflow.
 
 ## Final live order evidence
 
 On 2026-08-17 the approved customer authenticated with an active member, quoted a live published Sandwich at 1,290 sen and placed ASAP order `100006` (`7cf027dc-3ff0-4604-a3fd-c7a943aac603`) through `place_customer_order`.
 
-The real Owner authenticated through the same-origin HttpOnly Dashboard BFF. The queue observed the exact persisted order, then the BFF persisted `confirmed` v1 → `preparing` v2 → `ready` v3 → `completed` v4. The customer's authorized `get_order` read observed preparing, ready and completed. The final all-status queue contained one retained order: this completed E2E record.
+The real Owner authenticated through the same-origin HttpOnly Dashboard BFF. The queue observed the exact persisted order, then the BFF persisted `confirmed` v1 → `preparing` v2 → `ready` v3 → `completed` v4. The customer's authorized `get_order` read observed preparing, ready and completed. Independent database verification confirms the completed order and matching event sequence.
 
 Credentials remained process-local and were removed after authenticated work. No service role, direct SQL order insert, password reset or employee bearer-token persistence was used.
 
-## Final coordination action
+## Merge handoff
 
-- apply the mirror delta to the customer governance set;
-- independently verify both PRs and their final diffs;
-- change both PR titles from `[PARTIAL]` only after that cross-repository verification;
-- mark both PRs ready for review only after that verification;
-- merge the coordinated integration PRs rather than the old stacked task PRs;
-- close/supersede obsolete draft PRs after successful integration.
+TASK-CLOSEOUT-001 has no remaining implementation or validation blocker. The next repository action is the coordinated integration merge:
 
-Do not start the next business-domain feature before this closeout is complete.
+1. merge customer PR #13 into `master`;
+2. merge Dashboard PR #12 into `main`;
+3. verify both default branches contain the final mirrored governance state;
+4. close/supersede obsolete stacked draft PRs;
+5. start the next bounded product-domain task only after that merge housekeeping is complete.
+
+Hosted deployment, payments, loyalty, inventory, reporting and the other deferred domains are not blockers for this tranche.
