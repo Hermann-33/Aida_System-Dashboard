@@ -1,38 +1,47 @@
 # Auth signup diagnostic
 
-Status: `PARTIAL`
+Updated: 2026-08-17
 
-## Observed symptom
+Status: `COMPLETE` for the investigated signup/runtime incident.
 
-The customer Flutter signup flow returned the generic message `Authentication failed` while the live Supabase project still contained zero Auth users, profiles, and members.
+## Historical symptom
 
-## Verified backend evidence
+During the Auth integration stack, the customer Flutter signup flow initially returned the generic message `Authentication failed`. A later physical release APK exposed a more specific transport failure: `SocketException / Failed host lookup` for the Supabase project hostname.
 
-- Supabase project: `eswovqxqzfevcdwwcmuh` (`Aida System`), `ACTIVE_HEALTHY`.
-- `auth.users` -> `public.handle_new_auth_user()` trigger exists and is enabled.
-- `public.handle_new_auth_user()` is `SECURITY DEFINER`, owned by `postgres`, and forces new public signups to the `customer` application role.
-- `public.generate_member_code()` exists.
-- The failed signup left zero Auth users and did not produce a corresponding provisioning-trigger Postgres error.
+At the earlier diagnostic point the live project had no approved real identities, so backend provisioning and client transport had to be separated rather than treating every failure as an RLS/member-trigger defect.
 
-This points to an Auth-layer rejection occurring before the profile/member trigger rather than an RLS/provisioning failure.
+## Verified trusted provisioning boundary
 
-## Client fix
+- Supabase project: `eswovqxqzfevcdwwcmuh` (`Aida System`).
+- `auth.users` -> `public.handle_new_auth_user()` trigger is the trusted signup provisioning path.
+- The provisioning function forces public signups to the `customer` application role.
+- `public.generate_member_code()` owns member-code generation.
+- Public signup cannot self-assign employee/admin roles, trusted verification outcomes or member codes.
 
-The customer repository branch `codex/fix-auth-signup-diagnostics` improves Supabase Auth failure mapping so common signup failures are no longer collapsed into the generic `Authentication failed` message.
+## Client diagnostic improvement
 
-No dashboard authentication bypass is required and no service-role/secret credential should be added.
+`SupabaseMemberRepository` maps common Auth failures instead of collapsing them all into a generic message. Covered classes include invalid credentials/email, disabled signup, rate limiting, duplicate accounts, password-policy/confirmation/provisioning failures and transport/network failures.
 
-## Hosted Auth configuration requirement
+Transport failures are presented without exposing raw stack traces, tokens or upstream internals.
 
-The currently available Supabase connector does not expose project Auth email-confirmation/SMTP mutation controls, so this task does not silently alter hosted Auth settings.
+No service-role/secret credential or Auth/RLS bypass was added.
 
-For a local demo, one of these must be true before arbitrary customer email signup can be expected to work:
+## Android release root cause
 
-1. configure a working custom SMTP/email confirmation path; or
-2. explicitly disable Confirm Email in the Supabase Authentication email provider for the demo environment.
+TASK-AUTH-006 independently proved that the production/main Android manifest omitted `android.permission.INTERNET` while debug/profile overlays declared it. The release APK therefore could fail before any request reached Supabase.
 
-This is a project-configuration action, not a database migration.
+The fix moved the required permission into the main manifest and added a regression test. The committed Android toolchain was later made reproducible with AGP 8.9.1 and Gradle 8.11.1.
 
-## Dashboard implication
+## Final validation
 
-The dashboard still requires a trusted `admin` or `owner` identity and valid local Supabase environment variables before protected Members/Menu pages can stay mounted and load data.
+The user installed the corrected release APK on a physical Android phone and successfully created a new customer account. Supabase provisioned Auth/profile/member state and the new member appeared in protected Dashboard Members. The previous host-lookup failure did not recur.
+
+Current closeout evidence has 9 Auth users, 9 profiles, 6 members and trusted employee roles owner/admin/staff = 1/1/1. A real Owner can sign into the Dashboard protected Admin path.
+
+The final TASK-CLOSEOUT-001 live order E2E also authenticated a real customer normally through Supabase Auth, confirming the customer Auth/session boundary is operational.
+
+## Hosted Auth configuration note
+
+Email-confirmation/SMTP behavior remains hosted Supabase Auth configuration and is not a database migration. The current security advisor also reports `auth_leaked_password_protection` because leaked-password protection is disabled; that operational warning is tracked separately in `docs/security/SECURITY_REVIEW.md` and `docs/context/SUPABASE_STATUS.md`.
+
+This diagnostic should no longer be used as evidence that signup, real identities or protected Dashboard access are pending. Current truth is in `ACTIVE_CONTEXT.md` and `CLOSEOUT_EVIDENCE_2026-08-17.md`.
