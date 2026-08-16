@@ -1,60 +1,88 @@
 # Current Handoff
 
-Updated: 2026-08-14
+Updated: 2026-08-17
 
 ## Task
 
-`TASK-CLOSEOUT-001 — complete current AIDA implementation tranche`
+`TASK-CLOSEOUT-001 — complete and close the current AIDA implementation tranche`
 
-Dashboard branch: `codex/task-closeout-001-tranche-completion`
+Coordinated branches:
 
-Dashboard PR: #12, targeting `main`, kept draft until every cross-client gate passes.
+- customer: `codex/task-closeout-001-tranche-completion`
+- dashboard: `codex/task-closeout-001-tranche-completion`
 
-## Completed dashboard implementation
+Integration PRs:
 
-The POS now uses the existing ADR-0010 order BFF rather than creating a second backend:
+- customer PR #13 → `master`
+- dashboard PR #12 → `main`
 
-- typed `/api/v1/orders/*` client through `employeeFetch` and HttpOnly cookies;
-- cart-to-contract mapping sends item/variant/add-on IDs, quantity and optional note only;
-- server quote total is rendered as authority; local total is labelled estimate;
-- ASAP and scheduled pickup are derived from the server policy;
-- one `clientRequestId` survives retry of the same placement attempt;
-- cart/fulfilment state remains after quote/place failure and clears only after persisted success;
-- persisted server order UUID/number/total/status are displayed;
-- active commercial wording is `Pay at counter`/unpaid, with no fake settlement;
-- live queue polls at 2.5 seconds, never falls back to preview transactions, and invalidates after mutations;
-- legal next transitions submit the current `statusVersion` and refetch on HTTP 409 conflict;
-- terminal states expose no mutation controls.
+Both are draft and technically mergeable.
 
-TASK-AUTH-005 remains intact: preview Members makes no privileged request, preview Menu reads the public live catalogue read-only, and live BFF 401 does not destroy preview identity.
+**Verdict:** PARTIAL — all implementation/toolchain gates are closed; one live cross-client order E2E gate remains.
 
-## Current live evidence
+## Closed implementation gates
 
-Dated 2026-08-14, not permanent invariants:
+### Customer
 
-- Auth users 9; profiles 9; members 6;
-- roles: owner 1, admin 1, staff 1;
-- orders 0 at baseline; catalogue revision 15;
-- physical Android release signup provisioned a member visible in Dashboard Members;
-- real Owner login succeeded locally;
-- Owner Admin Menu price mutation propagated to the installed customer app;
-- Android release networking/signup path is validated.
+- physical Android networking/Auth/signup works;
+- trusted profile/member provisioning works and appears in Dashboard Members;
+- shared catalogue refresh from a real Owner mutation works on the installed phone;
+- authoritative quote/place, ASAP/scheduled pickup, Pay at counter, persisted history/detail/status and owner-scoped status refetch are implemented;
+- Android release builds reproducibly from committed Git with AGP 8.9.1 and Gradle 8.11.1;
+- Flutter 3.44.9 pub get/analyze/44 tests/release build pass;
+- independent clean-worktree release build passes;
+- canonical Auth/member, catalogue and order SQL regressions pass transactionally.
 
-Employee identities are not loyalty/member rows.
+### Dashboard
 
-## Remaining gate
+- real employee/Admin same-origin HttpOnly BFF path is implemented;
+- protected Members and shared catalogue Admin mutation are implemented and physically validated;
+- TASK-AUTH-005 preview/live regression remains fixed;
+- authoritative POS quote/place and server-policy scheduling are implemented;
+- live order board polls the BFF and has no preview-order fallback;
+- legal versioned status transitions and 409 conflict refetch are implemented;
+- active order semantics are Pay at counter/unpaid only;
+- lint/typecheck/25 Vitest files with 111 tests/build/8 Playwright tests/diff check pass;
+- final `npm audit` reports 0 vulnerabilities.
 
-A fresh live customer-place → Dashboard observe/preparing/ready/completed → customer authorized refresh run was not executable from repository/environment state because no approved account passwords are available. Do not invent an Auth user, reset durable demo passwords, use service role, or insert an order directly with SQL.
+## Last verified backend evidence
 
-Acceptable next execution: inject approved customer and staff/Admin demo credentials ephemerally, run the supported customer placement RPC/client boundary and Dashboard UI/BFF transitions, then remove/retain only a clearly labelled demo order according to product preference.
+Dated 2026-08-14:
 
-## Security/deployment
+- 9 Auth users;
+- 9 profiles;
+- 6 members;
+- 1 owner;
+- 1 admin;
+- 1 staff;
+- 0 retained orders at baseline;
+- catalogue revision 15.
 
-- No service-role/secret or browser employee bearer token is used.
-- Current Supabase advisor: one WARN, `auth_leaked_password_protection`.
-- Hosted deployment: **DEFERRED**, not a local-demo merge blocker.
-- Payment, loyalty, inventory, reporting, tax, delivery and branch capacity remain deferred.
+Current advisor evidence: one WARN for leaked-password protection being disabled. Hosted deployment remains DEFERRED for the accepted local-PC → cloud-Supabase → installed-phone workflow.
 
-## Customer mirror delta
+## Only remaining closeout action
 
-Mirror the 2026-08-14 live counts/evidence, current security-advisor WARN, Android physical validation, catalogue physical E2E, dashboard authoritative order frontend status, deferred deployment status, and remaining credential-bound cross-client order E2E into the customer repository governance set. Do not copy dashboard-local implementation file maps into customer-local docs.
+Run one credential-backed supported order lifecycle using approved demo accounts supplied ephemerally:
+
+1. authenticate as a real customer/member;
+2. place through the supported customer ordering boundary;
+3. observe the persisted order in the Dashboard queue;
+4. transition it to preparing;
+5. confirm the customer authorized read/refetch observes preparing;
+6. transition to ready;
+7. confirm the customer observes ready;
+8. transition to completed;
+9. confirm the customer observes completed.
+
+Do not commit credentials, reset durable demo passwords, use service role, or insert an order directly with SQL.
+
+## After that run
+
+- record the order E2E evidence in both mirrored governance sets;
+- rerun final diff/status/secret/security and PR mergeability checks;
+- change both PR titles from `[PARTIAL]` only if every gate remains green;
+- mark both PRs ready for review;
+- merge the coordinated integration PRs rather than the old stacked task PRs;
+- close/supersede obsolete draft PRs after successful integration.
+
+Do not start the next business-domain feature before this closeout is complete.
