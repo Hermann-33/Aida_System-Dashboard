@@ -1,52 +1,68 @@
 # AIDA Café Project Brief
 
-Updated: 2026-08-14
+Updated: 2026-08-17
 
 ## Product purpose
 
-AIDA Café is the ordering, membership, loyalty and café-operations system for City University Malaysia. The product combines a customer application with staff POS and administration workflows over one authoritative backend.
+AIDA Café is the customer ordering, membership and café-operations system for City University Malaysia. It combines a Flutter customer application and a React Dashboard/Admin/POS over one authoritative Supabase backend.
 
-## System components
+## Current implemented tranche
 
 ### Customer application
 
 Repository: `Hermann-33/Aida_System`.
 
-Flutter customer UI for authentication, member provisioning, shared catalogue browsing/configuration, authoritative quote/place, scheduled pickup, history and persisted status refresh. Rewards/vouchers, real payment settlement and several downstream domains remain preview/deferred.
+Implemented and validated:
 
-### POS/Admin dashboard
+- Supabase Auth/session/signup/logout and trusted customer profile/member provisioning;
+- server-generated member code and minimum per-user offline member-code cache;
+- shared database-backed catalogue with variants/add-ons and revision invalidation/refetch;
+- authoritative quote and idempotent customer order placement;
+- ASAP/scheduled pickup from server policy;
+- explicit Pay-at-counter/unpaid order semantics;
+- persisted order history/detail/status and owner-scoped Realtime-triggered refetch;
+- Android production Internet permission and reproducible release packaging from committed Git.
+
+Physical Android validation proved signup/member provisioning and Dashboard catalogue mutation propagation to the installed app.
+
+### Dashboard/Admin/POS
 
 Repository: `Hermann-33/Aida_System-Dashboard`.
 
-React 19 + TypeScript + Vite browser application. Trusted employee/Admin, Members, catalogue, POS quote/place and staff order queue/status paths use same-origin BFF APIs backed by the shared Supabase project. Many non-tranche operational surfaces remain explicit preview/local functionality.
+Implemented and validated:
+
+- same-origin employee/Admin BFF with HttpOnly session cookies;
+- trusted role/disabled-state authorization;
+- protected Admin Members;
+- shared catalogue POS reads and protected Admin catalogue mutation;
+- TASK-AUTH-005 preview/live session separation;
+- authoritative POS quote/place using the existing order BFF;
+- server-policy ASAP/scheduled pickup;
+- stable placement idempotency;
+- explicit Pay-at-counter/unpaid semantics;
+- live polled order queue with no preview-order fallback;
+- legal versioned fulfilment transitions and stale-version refetch.
 
 ### Shared backend
 
 Supabase project **Aida System**, ref `eswovqxqzfevcdwwcmuh`.
 
-Trusted identity/membership, catalogue, quote/order, scheduled pickup and fulfilment persistence are implemented with RLS and controlled RPCs. Payment, loyalty, inventory, marketing, reporting and branch-capacity authority remain deferred.
+Implemented authority includes Auth/profile/member, catalogue, quote/order, scheduling, immutable order snapshots, idempotency, fulfilment transitions/events, RLS/FORCE RLS, controlled RPCs and Realtime signals. Canonical executable migrations live in the customer repository.
 
-## Target users
+## Current closeout status
 
-- Students and other café customers.
-- Baristas/cashiers/staff operating shared terminals and POS workflows.
-- Managers/admin/owners operating catalogue, staff, inventory, rewards, marketing and reporting workflows.
+Both client implementations and their local test/build gates are complete for the current tranche. The only remaining ADR-0004 closeout gate is a fresh live supported order lifecycle proving customer placement → Dashboard observation/transitions → customer authorized persisted-status refresh.
 
-## Shared product rule
+Customer PR #13 and Dashboard PR #12 are technically mergeable but remain draft until that E2E and final mirrored-document/merge-readiness checks pass.
 
-The two frontends are views/controllers over one operational system. They must use the same identifiers, lifecycle definitions and backend rules. The customer app cannot invent a price/order/reward outcome that the POS does not recognise, and the dashboard cannot mutate data outside the same server-enforced contract.
+## Trust rule
 
-## Current maturity
+Clients may stage interaction and selection intent, but never authorize identity, roles, member codes, prices, totals, order numbers/status, payment state, loyalty value, inventory or reporting truth. Dashboard privileged calls stay behind the same-origin BFF; customer Flutter uses public client configuration and customer-scoped backend authority.
 
-- Customer: live Auth/member/catalogue/order integration exists; deferred domains remain preview.
-- Dashboard: live Admin/member/catalogue/order integration exists; deferred operations remain preview.
-- Supabase: authoritative identity/member, catalogue, order/schedule and fulfilment state.
-- Current ordering tranche: implementation complete across backend and both clients; final fresh cross-client live E2E evidence remains the closeout gate.
+## Deferred scope
 
-## Core business domains
-
-Identity/session, membership/student verification, branches/sales points/terminals, employees/roles, catalogue/modifiers/pricing, cart/quote, orders/fulfilment/KDS, payments/refunds, loyalty/rewards/vouchers, inventory/recipes/wastage/transfers, promotions/marketing, reporting and immutable audit.
+Real payment/refunds, loyalty ledger/redemption, inventory, promotions/discount authority, tax/accounting, trusted reporting, branch-scoped operations/capacity, delivery and hosted production deployment/release operations remain future bounded tasks.
 
 ## Success criteria
 
-AIDA succeeds when role-appropriate users complete their flows against one trusted backend with consistent IDs and state transitions, server-authoritative value calculations, secure ownership/branch/role access, audited privileged actions, usable failure/offline behavior, reproducible migrations, cross-client integration tests and current mirrored documentation.
+AIDA succeeds when role-appropriate users complete their flows against one trusted backend with consistent IDs/state transitions, server-authoritative value calculations, secure ownership/role access, reproducible migrations/builds, cross-client integration evidence and current mirrored documentation.
