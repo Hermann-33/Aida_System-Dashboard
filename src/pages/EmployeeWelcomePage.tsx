@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   getEmployeeSession,
@@ -69,26 +69,7 @@ export function EmployeeWelcomePage() {
   const [sampleExpiresInSec, setSampleExpiresInSec] = useState(15 * 60);
   const badgeRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    void (async () => {
-      const session = await refreshEmployeeSessionFromServer();
-      if (session.status === 'authenticated' && session.identity) {
-        navigate(resolvePostLoginPath(session.identity), { replace: true });
-        return;
-      }
-      await resolveTerminal();
-    })();
-  }, [navigate]);
-
-  useEffect(() => {
-    if (!preview || !needsEnrol) return;
-    const id = window.setInterval(() => {
-      setSampleExpiresInSec((s) => (s > 0 ? s - 1 : 0));
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [preview, needsEnrol]);
-
-  async function resolveTerminal() {
+  const resolveTerminal = useCallback(async () => {
     if (preview) {
       const status = await previewTerminalRepository.getStatus();
       if (!status.enrolled) {
@@ -118,7 +99,26 @@ export function EmployeeWelcomePage() {
       salesPointName: status.location.salesPointName,
     });
     setNeedsEnrol(false);
-  }
+  }, [preview]);
+
+  useEffect(() => {
+    void (async () => {
+      const session = await refreshEmployeeSessionFromServer();
+      if (session.status === 'authenticated' && session.identity) {
+        navigate(resolvePostLoginPath(session.identity), { replace: true });
+        return;
+      }
+      await resolveTerminal();
+    })();
+  }, [navigate, resolveTerminal]);
+
+  useEffect(() => {
+    if (!preview || !needsEnrol) return;
+    const id = window.setInterval(() => {
+      setSampleExpiresInSec((s) => (s > 0 ? s - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [preview, needsEnrol]);
 
   async function onEnrol(e: FormEvent) {
     e.preventDefault();

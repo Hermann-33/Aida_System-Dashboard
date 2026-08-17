@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Clock,
   HelpCircle,
@@ -12,19 +13,12 @@ import {
 } from 'lucide-react';
 import type { EmployeeIdentity, ShiftSummary, TerminalLocation } from '../../auth/types';
 import {
-  PREVIEW_CATEGORIES,
-  PREVIEW_MENU,
-  PREVIEW_MODIFIER_GROUPS,
   PREVIEW_TERMINALS,
-  PREVIEW_TRANSACTIONS,
   PREVIEW_VARIANCE_THRESHOLD_SEN,
   type ConnectionState,
   type OrderType,
-  type PreviewCategory,
   type PreviewMember,
-  type PreviewMenuItem,
   type PreviewRewardOption,
-  type PreviewTxn,
 } from '../../preview/fixtures/catalog';
 import { ConfirmDialog } from '../../shared/components/ConfirmDialog';
 import { formatRmFromSen, formatRm } from '../../shared/formatting/money';
@@ -35,11 +29,26 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ManagerPinDialog } from './ManagerPinDialog';
 import { MemberPanel } from './MemberPanel';
 import { ModifierSheet } from './ModifierSheet';
-import { CompletedSaleReceipt, PaymentPanel } from './PaymentPanel';
-import type { PreviewSaleReceipt } from './paymentReceipt';
+import {
+  AuthoritativeOrderReceipt,
+  OrderCheckoutPanel,
+  type PlacementAttempt,
+} from '../orders/OrderCheckoutPanel';
+import { OrderBoard } from '../orders/OrderBoard';
+import type { OrderSnapshot } from '../orders/orderClient';
+import {
+  fetchPublishedCatalogue,
+  type CatalogueItem,
+} from '../catalogue/catalogueClient';
+import {
+  ALL_POS_CATEGORIES,
+  compactCatalogueLabel,
+  posCatalogueCategories,
+  posCatalogueItems,
+  posModifierGroups,
+} from './posCatalogue';
 import {
   cartTotalSen,
   newCartLineId,
@@ -78,18 +87,9 @@ const ORDER_TYPE_LABELS: Record<OrderType, string> = {
   pickup: 'Pickup',
 };
 
-function rewardDiscountSen(reward: PreviewRewardOption | null): number {
-  if (!reward?.eligible) return 0;
-  if (reward.kind === 'offer' && reward.label.includes('RM2')) return 200;
-  if (reward.kind === 'voucher' && reward.label.includes('RM 5')) return 500;
-  if (reward.kind === 'voucher' && reward.label.includes('RM 10')) return 1000;
-  if (reward.kind === 'free_pastry') return 750;
-  if (reward.kind === 'free_drink') return 1200;
-  return 0;
-}
+const POS_CATALOGUE_QUERY = ['pos-catalogue'] as const;
 
 export function CounterWorkspace({
-  employee,
   location,
   shift,
   onLock,
@@ -99,30 +99,27 @@ export function CounterWorkspace({
   connectionState,
   onConnectionStateChange,
 }: Props) {
+  const catalogue = useQuery({
+    queryKey: POS_CATALOGUE_QUERY,
+    queryFn: () => fetchPublishedCatalogue(),
+  });
   const [rail, setRail] = useState<RailId>('sale');
-  const [category, setCategory] = useState<PreviewCategory>('All');
+  const [categoryId, setCategoryId] = useState(ALL_POS_CATEGORIES);
   const [search, setSearch] = useState('');
   const [compactMenu, setCompactMenu] = useState(false);
   const [orderType, setOrderType] = useState<OrderType>('dine_in');
   const [cart, setCart] = useState<CartLine[]>([]);
   const [member, setMember] = useState<PreviewMember | null>(null);
   const [selectedReward, setSelectedReward] = useState<PreviewRewardOption | null>(null);
-  const [modifierItem, setModifierItem] = useState<PreviewMenuItem | null>(null);
+  const [modifierItem, setModifierItem] = useState<CatalogueItem | null>(null);
   const [showPayment, setShowPayment] = useState(false);
-  const [completedSale, setCompletedSale] = useState<PreviewSaleReceipt | null>(null);
+  const [completedOrder, setCompletedOrder] = useState<OrderSnapshot | null>(null);
+  const placementAttempt = useRef<PlacementAttempt | null>(null);
   const [orderDrawerOpen, setOrderDrawerOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [heldTickets, setHeldTickets] = useState<HeldTicket[]>([]);
   const [discardTicketId, setDiscardTicketId] = useState<string | null>(null);
   const [showKdsPreview, setShowKdsPreview] = useState(false);
-
-  const [ordersQuery, setOrdersQuery] = useState('');
-  const [ordersStatus, setOrdersStatus] = useState<'all' | PreviewTxn['status']>('all');
-  const [selectedOrder, setSelectedOrder] = useState<PreviewTxn | null>(null);
-  const [orderAction, setOrderAction] = useState<'void' | 'refund' | 'cancel' | null>(null);
-  const [orderActionReason, setOrderActionReason] = useState('');
-  const [orderActionPinOpen, setOrderActionPinOpen] = useState(false);
-  const [orderActionLog, setOrderActionLog] = useState<string[]>([]);
 
   const [shiftPaidIn, setShiftPaidIn] = useState('');
   const [shiftPaidOut, setShiftPaidOut] = useState('');
@@ -130,43 +127,44 @@ export function CounterWorkspace({
   const [shiftMoveReason, setShiftMoveReason] = useState('');
   const [shiftMoveLog, setShiftMoveLog] = useState<string[]>([]);
 
-  const discountSen = rewardDiscountSen(selectedReward);
-  const totalSen = Math.max(0, cartTotalSen(cart) - discountSen);
+  const estimateTotalSen = cartTotalSen(cart);
+
+  const categories = useMemo(
+    () => catalogue.data ? posCatalogueCategories(catalogue.data) : [],
+    [catalogue.data],
+  );
+  const menuItems = useMemo(
+    () => catalogue.data ? posCatalogueItems(catalogue.data) : [],
+    [catalogue.data],
+  );
+  const modifierGroups = useMemo(
+    () => modifierItem && catalogue.data ? posModifierGroups(modifierItem, catalogue.data) : [],
+    [catalogue.data, modifierItem],
+  );
+
+  useEffect(() => {
+    if (categoryId !== ALL_POS_CATEGORIES && !categories.some((category) => category.id === categoryId)) {
+      setCategoryId(ALL_POS_CATEGORIES);
+    }
+  }, [categories, categoryId]);
 
   const filteredMenu = useMemo(() => {
-    let items = PREVIEW_MENU;
-    if (category !== 'All') {
-      items = items.filter((i) => i.category === category || (category === 'Favourites' && i.bestSeller));
+    let items = menuItems;
+    if (categoryId !== ALL_POS_CATEGORIES) {
+      items = items.filter((item) => item.categoryId === categoryId);
     }
     if (search.trim()) {
       const q = search.toLowerCase();
       items = items.filter((i) => i.name.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q));
     }
     return items;
-  }, [category, search]);
-
-  const filteredOrders = useMemo(() => {
-    let rows = PREVIEW_TRANSACTIONS;
-    if (ordersStatus !== 'all') {
-      rows = rows.filter((t) => t.status === ordersStatus);
-    }
-    if (ordersQuery.trim()) {
-      const q = ordersQuery.toLowerCase();
-      rows = rows.filter(
-        (t) =>
-          t.order.toLowerCase().includes(q)
-          || t.staff.toLowerCase().includes(q)
-          || (t.member?.toLowerCase().includes(q) ?? false),
-      );
-    }
-    return rows;
-  }, [ordersQuery, ordersStatus]);
+  }, [categoryId, menuItems, search]);
 
   const terminalFixture = PREVIEW_TERMINALS.find((t) => t.code === location.terminalCode)
     ?? PREVIEW_TERMINALS[0];
 
-  function addToCart(item: PreviewMenuItem) {
-    if (!item.available || completedSale) return;
+  function addToCart(item: CatalogueItem) {
+    if (!item.isAvailable || completedOrder) return;
     setModifierItem(item);
   }
 
@@ -222,13 +220,14 @@ export function CounterWorkspace({
     setMember(null);
     setSelectedReward(null);
     setShowPayment(false);
-    setCompletedSale(null);
+    setCompletedOrder(null);
+    placementAttempt.current = null;
     setRail('sale');
     setOrderDrawerOpen(false);
   }
 
-  function handlePaid(receipt: PreviewSaleReceipt) {
-    setCompletedSale(receipt);
+  function handlePlaced(order: OrderSnapshot) {
+    setCompletedOrder(order);
     setCart([]);
     setShowPayment(false);
     setOrderDrawerOpen(false);
@@ -312,7 +311,7 @@ export function CounterWorkspace({
     if (label === 'Safe drop') setShiftDrop('');
   }
 
-  const saleLocked = completedSale !== null;
+  const saleLocked = completedOrder !== null;
 
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -349,7 +348,7 @@ export function CounterWorkspace({
       </nav>
 
       <main className="flex-1 overflow-y-auto bg-background px-4 pb-24 pt-4 sm:px-6 sm:pt-6 lg:pb-6">
-        {rail === 'sale' && !showPayment && !completedSale && (
+        {rail === 'sale' && !showPayment && !completedOrder && (
           <>
             <header className="flex flex-wrap items-center gap-3">
               <h2 className="font-display text-xl text-primary">Menu</h2>
@@ -413,32 +412,59 @@ export function CounterWorkspace({
               </div>
             )}
 
-            <div role="tablist" aria-label="Categories" className="mt-4 flex flex-wrap gap-2">
-              {PREVIEW_CATEGORIES.map((cat) => (
+            {catalogue.isPending && <p className="mt-4 text-sm text-muted-foreground">Loading shared catalogue…</p>}
+            {catalogue.isError && (
+              <div className="mt-4 rounded-lg border border-destructive/40 bg-destructive/5 p-4" role="alert">
+                <p className="text-sm font-semibold text-destructive">The shared catalogue is unavailable.</p>
+                <p className="mt-1 text-sm text-muted-foreground">No preview menu is used as a fallback.</p>
+                <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void catalogue.refetch()}>
+                  Retry catalogue
+                </Button>
+              </div>
+            )}
+
+            {catalogue.data && <div role="tablist" aria-label="Categories" className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={categoryId === ALL_POS_CATEGORIES}
+                onClick={() => setCategoryId(ALL_POS_CATEGORIES)}
+                className={
+                  categoryId === ALL_POS_CATEGORIES
+                    ? 'rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground'
+                    : 'rounded-full border border-border bg-card px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground'
+                }
+              >
+                All
+              </button>
+              {categories.map((cat) => (
                 <button
-                  key={cat}
+                  key={cat.id}
                   type="button"
                   role="tab"
-                  aria-selected={category === cat}
-                  onClick={() => setCategory(cat)}
+                  aria-selected={categoryId === cat.id}
+                  onClick={() => setCategoryId(cat.id)}
                   className={
-                    category === cat
+                    categoryId === cat.id
                       ? 'rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground'
                       : 'rounded-full border border-border bg-card px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground'
                   }
                 >
-                  {cat}
+                  {cat.name}
                 </button>
               ))}
-            </div>
+            </div>}
 
-            <p aria-live="polite" className="mt-3 text-sm text-muted-foreground">
+            {catalogue.data && <p aria-live="polite" className="mt-3 text-sm text-muted-foreground">
               Showing {filteredMenu.length} item{filteredMenu.length === 1 ? '' : 's'} ·{' '}
-              {category === 'All' ? 'all categories' : category}
-            </p>
+              {categoryId === ALL_POS_CATEGORIES
+                ? 'all categories'
+                : categories.find((category) => category.id === categoryId)?.name ?? 'shared category'}
+              {' '}· catalogue revision {catalogue.data.revision}
+            </p>}
 
             <div
-              data-category={category}
+              data-category={categoryId}
               className={
                 compactMenu
                   ? 'mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-6'
@@ -449,7 +475,7 @@ export function CounterWorkspace({
                 <button
                   key={item.id}
                   type="button"
-                  disabled={!item.available}
+                  disabled={!item.isAvailable}
                   onClick={() => addToCart(item)}
                   className={
                     compactMenu
@@ -463,27 +489,22 @@ export function CounterWorkspace({
                       alt=""
                       loading="lazy"
                       className={
-                        item.available
+                        item.isAvailable
                           ? 'absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105'
                           : 'absolute inset-0 h-full w-full object-cover grayscale'
                       }
                     />
                   ) : (
-                    <span
-                      aria-hidden="true"
-                      title={`Tone ${item.imageTone}`}
-                      className="absolute inset-0"
-                      style={{ backgroundColor: item.imageTone }}
-                    />
+                    <span aria-hidden="true" className="absolute inset-0 bg-[var(--aida-burgundy)]" />
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
 
-                  {item.bestSeller && (
+                  {item.isBestSeller && (
                     <span className="absolute left-2 top-2 rounded-full bg-[var(--aida-gold)] px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-[var(--aida-espresso)]">
                       Best seller
                     </span>
                   )}
-                  {!item.available && (
+                  {!item.isAvailable && (
                     <span className="absolute right-2 top-2 rounded-full bg-destructive px-2 py-0.5 text-xs font-bold uppercase text-destructive-foreground">
                       Sold out
                     </span>
@@ -492,11 +513,11 @@ export function CounterWorkspace({
                   <div className="relative z-10 p-3 text-white">
                     {!compactMenu && (
                       <p className="text-xs font-bold uppercase tracking-widest text-white/80">
-                        {item.category}
+                        {item.categoryName}
                       </p>
                     )}
                     <p className={compactMenu ? 'text-sm font-bold leading-tight' : 'mt-1 text-lg font-bold leading-tight'}>
-                      {compactMenu ? item.compactLabel : item.name}
+                      {compactMenu ? compactCatalogueLabel(item.name) : item.name}
                     </p>
                     <p
                       className={
@@ -505,7 +526,7 @@ export function CounterWorkspace({
                           : 'mt-1 text-base font-bold text-[var(--aida-gold)]'
                       }
                     >
-                      {formatRmFromSen(item.priceSen)}
+                      {formatRmFromSen(item.basePriceSen)}
                     </p>
                   </div>
                 </button>
@@ -525,7 +546,7 @@ export function CounterWorkspace({
                 <ul className="mt-2 flex flex-col gap-1 text-sm text-muted-foreground">
                   {cart.map((line) => (
                     <li key={line.id}>
-                      {line.qty}× {line.name} → {PREVIEW_MENU.find((m) => m.id === line.menuItemId)?.route ?? 'bar'}
+                      {line.qty}× {line.name} → {catalogue.data?.items.find((item) => item.id === line.menuItemId)?.prepRoute ?? 'bar'}
                       {line.note && ` · Note: ${line.note}`}
                     </li>
                   ))}
@@ -535,167 +556,11 @@ export function CounterWorkspace({
           </>
         )}
 
-        {rail === 'sale' && completedSale && <CompletedSaleReceipt receipt={completedSale} />}
-
-        {rail === 'orders' && (
-          <section aria-labelledby="orders-preview-title">
-            <h2 id="orders-preview-title" className="font-display text-xl text-primary">
-              Orders
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Preview history — void/refund/cancel write Team 2 audit records when live.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Label htmlFor="orders-search" className="sr-only">
-                Search orders
-              </Label>
-              <Input
-                id="orders-search"
-                type="search"
-                placeholder="Order #, staff, member…"
-                value={ordersQuery}
-                onChange={(e) => setOrdersQuery(e.target.value)}
-                className="max-w-[18rem]"
-              />
-              <Select value={ordersStatus} onValueChange={(v) => setOrdersStatus(v as typeof ordersStatus)}>
-                <SelectTrigger aria-label="Filter by status" className="w-[10rem]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="Completed">Completed</SelectItem>
-                  <SelectItem value="Refunded">Refunded</SelectItem>
-                  <SelectItem value="Voided">Voided</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <table className="data-table admin-table mt-4">
-              <thead>
-                <tr>
-                  <th>Order</th>
-                  <th>When</th>
-                  <th>Staff</th>
-                  <th>Status</th>
-                  <th>Total</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {filteredOrders.map((row) => (
-                  <tr key={row.order}>
-                    <td>{row.order}</td>
-                    <td>{row.when}</td>
-                    <td>{row.staff}</td>
-                    <td>{row.status}</td>
-                    <td>{formatRmFromSen(row.totalSen)}</td>
-                    <td>
-                      <Button type="button" variant="outline" size="sm" onClick={() => setSelectedOrder(row)}>
-                        Detail
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {selectedOrder && (
-              <div
-                role="region"
-                aria-label="Order detail"
-                className="mt-4 rounded-xl border border-border bg-card p-5"
-              >
-                <h3 className="text-lg font-bold text-foreground">{selectedOrder.order}</h3>
-                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
-                  <div>
-                    <dt className="font-semibold text-muted-foreground">When</dt>
-                    <dd>{selectedOrder.when}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-semibold text-muted-foreground">Staff</dt>
-                    <dd>{selectedOrder.staff}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-semibold text-muted-foreground">Point</dt>
-                    <dd>{selectedOrder.salesPoint}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-semibold text-muted-foreground">Method</dt>
-                    <dd>{selectedOrder.method}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-semibold text-muted-foreground">Status</dt>
-                    <dd>{selectedOrder.status}</dd>
-                  </div>
-                  {selectedOrder.member && (
-                    <div>
-                      <dt className="font-semibold text-muted-foreground">Member</dt>
-                      <dd>{selectedOrder.member}</dd>
-                    </div>
-                  )}
-                  <div>
-                    <dt className="font-semibold text-muted-foreground">Total</dt>
-                    <dd>{formatRmFromSen(selectedOrder.totalSen)}</dd>
-                  </div>
-                </dl>
-                {orderAction && (
-                  <div className="mt-4 flex flex-col gap-2">
-                    <Label htmlFor="order-action-reason">
-                      Reason for {orderAction} (Team 2 audit when live)
-                    </Label>
-                    <textarea
-                      id="order-action-reason"
-                      value={orderActionReason}
-                      onChange={(e) => setOrderActionReason(e.target.value)}
-                      rows={3}
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    />
-                  </div>
-                )}
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button type="button" variant="outline" onClick={() => setOrderAction('void')}>
-                    Void preview
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => setOrderAction('refund')}>
-                    Refund preview
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => setOrderAction('cancel')}>
-                    Cancel preview
-                  </Button>
-                  {orderAction && (
-                    <Button
-                      type="button"
-                      disabled={!orderActionReason.trim()}
-                      onClick={() => setOrderActionPinOpen(true)}
-                    >
-                      Submit {orderAction} preview
-                    </Button>
-                  )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setSelectedOrder(null);
-                      setOrderAction(null);
-                      setOrderActionReason('');
-                    }}
-                  >
-                    Close
-                  </Button>
-                </div>
-
-                {orderActionLog.filter((entry) => entry.includes(selectedOrder.order)).length > 0 && (
-                  <ul className="mt-3 flex flex-col gap-1 text-sm text-muted-foreground">
-                    {orderActionLog
-                      .filter((entry) => entry.includes(selectedOrder.order))
-                      .map((entry, i) => (
-                        <li key={i}>{entry}</li>
-                      ))}
-                  </ul>
-                )}
-              </div>
-            )}
-          </section>
+        {rail === 'sale' && completedOrder && (
+          <AuthoritativeOrderReceipt order={completedOrder} onNewSale={startNewSale} />
         )}
+
+        {rail === 'orders' && <OrderBoard />}
 
         {rail === 'member' && (
           <MemberPanel
@@ -888,17 +753,11 @@ export function CounterWorkspace({
           </section>
         )}
 
-        {showPayment && !completedSale && (
-          <PaymentPanel
+        {showPayment && !completedOrder && (
+          <OrderCheckoutPanel
             lines={cart}
-            orderType={orderType}
-            member={member}
-            employee={employee}
-            location={location}
-            shift={shift}
-            discountSen={discountSen}
-            rewardLabel={selectedReward?.label}
-            onPaid={handlePaid}
+            placementAttempt={placementAttempt}
+            onPlaced={handlePlaced}
             onCancel={() => setShowPayment(false)}
           />
         )}
@@ -925,11 +784,11 @@ export function CounterWorkspace({
 
         <p className="mt-1 text-sm text-muted-foreground">{ORDER_TYPE_LABELS[orderType]}</p>
 
-        {saleLocked && completedSale ? (
+        {saleLocked && completedOrder ? (
           <div className="mt-4 flex flex-col gap-1">
-            <p className="text-lg font-bold text-foreground">Total paid: {formatRmFromSen(completedSale.totalSen)}</p>
+            <p className="text-lg font-bold text-foreground">Server total: {formatRmFromSen(completedOrder.totalSen)}</p>
             <p className="text-sm text-muted-foreground">
-              Order {completedSale.orderNumber} · {METHOD_SHORT[completedSale.method]}
+              Order #{completedOrder.orderNumber} · Pay at counter
             </p>
           </div>
         ) : cart.length === 0 ? (
@@ -1000,13 +859,11 @@ export function CounterWorkspace({
         <footer className="mt-auto flex flex-col gap-2 pt-4">
           {!saleLocked && (
             <>
-              <p className="text-sm text-muted-foreground">
-                Subtotal: {formatRmFromSen(cartTotalSen(cart))}
-                {discountSen > 0 && (
-                  <span className="text-[var(--aida-success)]"> · −{formatRmFromSen(discountSen)} reward</span>
-                )}
-              </p>
-              <p className="text-lg font-bold text-foreground">Total: {formatRmFromSen(totalSen)}</p>
+              <p className="text-sm text-muted-foreground">Local catalogue estimate</p>
+              <p className="text-lg font-bold text-foreground">Estimate: {formatRmFromSen(estimateTotalSen)}</p>
+              {selectedReward && (
+                <p className="text-xs text-muted-foreground">Preview reward is not applied to the authoritative order.</p>
+              )}
             </>
           )}
           {saleLocked ? (
@@ -1024,7 +881,7 @@ export function CounterWorkspace({
                   setOrderDrawerOpen(false);
                 }}
               >
-                Pay
+                Review &amp; place
               </Button>
               {cart.length > 0 && !showPayment && (
                 <Button type="button" variant="outline" onClick={holdOrder}>
@@ -1044,7 +901,7 @@ export function CounterWorkspace({
       {!orderDrawerOpen && (
         <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between border-t border-border bg-card px-4 py-3 shadow-lg lg:hidden">
           <p className="text-sm font-semibold text-foreground">
-            {cart.length} item{cart.length === 1 ? '' : 's'} · {formatRmFromSen(totalSen)}
+            {cart.length} item{cart.length === 1 ? '' : 's'} · estimate {formatRmFromSen(estimateTotalSen)}
           </p>
           <Button type="button" size="sm" onClick={() => setOrderDrawerOpen(true)}>
             {saleLocked ? 'View receipt' : 'View order'}
@@ -1055,8 +912,8 @@ export function CounterWorkspace({
       <ModifierSheet
         open={modifierItem !== null}
         itemName={modifierItem?.name ?? ''}
-        basePriceSen={modifierItem?.priceSen ?? 0}
-        groups={PREVIEW_MODIFIER_GROUPS}
+        basePriceSen={modifierItem?.basePriceSen ?? 0}
+        groups={modifierGroups}
         onConfirm={confirmModifier}
         onClose={() => setModifierItem(null)}
       />
@@ -1084,27 +941,6 @@ export function CounterWorkspace({
         onCancel={() => setDiscardTicketId(null)}
       />
 
-      <ManagerPinDialog
-        open={orderActionPinOpen}
-        actionLabel={`${orderAction ?? 'approve'} order ${selectedOrder?.order ?? ''}`}
-        onApprove={(managerName) => {
-          setOrderActionLog((prev) => [
-            `${selectedOrder?.order} — ${orderAction} — "${orderActionReason}" — approved by ${managerName} (preview; Team 2 audit)`,
-            ...prev,
-          ]);
-          setOrderActionPinOpen(false);
-          setOrderAction(null);
-          setOrderActionReason('');
-        }}
-        onCancel={() => setOrderActionPinOpen(false)}
-      />
     </div>
   );
 }
-
-const METHOD_SHORT: Record<PreviewSaleReceipt['method'], string> = {
-  cash: 'Cash',
-  card: 'Card',
-  ewallet: 'E-wallet',
-  student_wallet: 'Student wallet',
-};

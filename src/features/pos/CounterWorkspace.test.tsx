@@ -1,14 +1,45 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { CounterWorkspace } from './CounterWorkspace';
 import type { EmployeeIdentity, ShiftSummary, TerminalLocation } from '../../auth/types';
 import { MemberPanel } from './MemberPanel';
+import { fetchPublishedCatalogue, type CatalogueSnapshot } from '../catalogue/catalogueClient';
 
 vi.mock('../../preview/uiPreviewMode', () => ({
   isUiPreviewMode: vi.fn(() => true),
   UI_PREVIEW_LABEL: 'UI PREVIEW — SAMPLE DATA',
 }));
+
+vi.mock('../catalogue/catalogueClient', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../catalogue/catalogueClient')>();
+  return { ...original, fetchPublishedCatalogue: vi.fn() };
+});
+
+const sharedCatalogue: CatalogueSnapshot = {
+  revision: 8,
+  categories: [
+    { id: 'coffee', slug: 'coffee', name: 'Coffee', imageUrl: null, sortOrder: 10, isActive: true, itemCount: 2 },
+  ],
+  items: [
+    {
+      id: 'latte', categoryId: 'coffee', categoryName: 'Coffee', slug: 'latte', sku: 'LATTE', kind: 'product',
+      name: 'Latte', description: '', basePriceSen: 1050, isAvailable: true, isPublished: true,
+      isFeatured: false, isBestSeller: true, isStudentEligible: false, imageUrl: null, volumeMl: 350,
+      prepRoute: 'bar', sortOrder: 10, compatibleAddOnIds: ['oat'],
+      variants: [
+        { id: 'medium', code: 'medium', label: 'Medium', priceDeltaSen: 0, isDefault: true, isAvailable: true, sortOrder: 10 },
+      ],
+    },
+    {
+      id: 'oat', categoryId: 'coffee', categoryName: 'Coffee', slug: 'oat', sku: 'OAT', kind: 'addon',
+      name: 'Oat milk', description: '', basePriceSen: 150, isAvailable: true, isPublished: true,
+      isFeatured: false, isBestSeller: false, isStudentEligible: false, imageUrl: null, volumeMl: null,
+      prepRoute: 'bar', sortOrder: 20, compatibleAddOnIds: [], variants: [],
+    },
+  ],
+};
 
 const employee: EmployeeIdentity = {
   id: 'e1',
@@ -55,21 +86,42 @@ const workspaceProps = {
   onConnectionStateChange: () => {},
 };
 
+function renderWorkspace() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <CounterWorkspace {...workspaceProps} />
+    </QueryClientProvider>,
+  );
+}
+
 describe('CounterWorkspace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(fetchPublishedCatalogue).mockResolvedValue(sharedCatalogue);
   });
 
-  it('renders New Sale rail and menu item', () => {
-    render(<CounterWorkspace {...workspaceProps} />);
+  it('renders New Sale rail and an item from the shared catalogue', async () => {
+    renderWorkspace();
     expect(screen.getByRole('navigation', { name: 'POS navigation' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /new sale/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /salted caramel latte/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /latte/i })).toBeInTheDocument();
+    expect(screen.getByText(/catalogue revision 8/i)).toBeInTheDocument();
   });
 
-  it('shows product label Aida Counter in context via workspace brand', () => {
-    render(<CounterWorkspace {...workspaceProps} />);
+  it('shows product label Aida Counter in context via workspace brand', async () => {
+    renderWorkspace();
     expect(screen.getByText('Aida')).toBeInTheDocument();
+    await screen.findByRole('button', { name: /latte/i });
+  });
+
+  it('fails visibly without falling back to the preview menu', async () => {
+    vi.mocked(fetchPublishedCatalogue).mockRejectedValueOnce(new Error('offline'));
+    renderWorkspace();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/shared catalogue is unavailable/i);
+    expect(screen.queryByRole('button', { name: /salted caramel latte/i })).not.toBeInTheDocument();
   });
 });
 

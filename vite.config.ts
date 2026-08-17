@@ -3,6 +3,12 @@ import path from 'node:path';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { aidaBffPlugin } from './server/viteBffPlugin.js';
+
+const AIDA_PUBLIC_SERVER_DEFAULTS = {
+  AIDA_SUPABASE_URL: 'https://eswovqxqzfevcdwwcmuh.supabase.co',
+  AIDA_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_7WXAYCzC5ed6AdHTmskD6w_lapuztIT',
+};
 
 /**
  * Fail production builds if employee-auth bypass is enabled.
@@ -29,22 +35,35 @@ function failClosedAuthPlugin(mode: string): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => ({
-  plugins: [react(), tailwindcss(), failClosedAuthPlugin(mode)],
-  resolve: {
-    alias: {
-      '@': path.resolve(import.meta.dirname, './src'),
+export default defineConfig(({ mode }) => {
+  // The URL and publishable key are public Supabase client configuration. Keep
+  // safe AIDA defaults so a missing/blank local .env cannot make the same-origin
+  // BFF unavailable. Non-empty explicit environment values still override the
+  // defaults. Secret/service-role keys remain prohibited.
+  const loadedEnv = loadEnv(mode, process.cwd(), '');
+  const serverEnv = {
+    ...loadedEnv,
+    AIDA_SUPABASE_URL:
+      loadedEnv.AIDA_SUPABASE_URL?.trim() || AIDA_PUBLIC_SERVER_DEFAULTS.AIDA_SUPABASE_URL,
+    AIDA_SUPABASE_PUBLISHABLE_KEY:
+      loadedEnv.AIDA_SUPABASE_PUBLISHABLE_KEY?.trim()
+      || AIDA_PUBLIC_SERVER_DEFAULTS.AIDA_SUPABASE_PUBLISHABLE_KEY,
+  };
+  return {
+    plugins: [react(), tailwindcss(), aidaBffPlugin(serverEnv), failClosedAuthPlugin(mode)],
+    resolve: {
+      alias: {
+        '@': path.resolve(import.meta.dirname, './src'),
+      },
     },
-  },
-  test: {
-    environment: 'jsdom',
-    setupFiles: './src/test/setup.ts',
-    globals: true,
-    exclude: ['**/node_modules/**', '**/e2e/**', '**/dist/**'],
-  },
-  server: {
-    port: 5173,
-    // Frontend-only migration: do not proxy to a production/local API.
-    // Preview mode uses in-app fixtures; enable a proxy later only when Team 2 adapters land.
-  },
-}));
+    test: {
+      environment: 'jsdom',
+      setupFiles: './src/test/setup.ts',
+      globals: true,
+      exclude: ['**/node_modules/**', '**/e2e/**', '**/dist/**'],
+    },
+    server: {
+      port: 5173,
+    },
+  };
+});

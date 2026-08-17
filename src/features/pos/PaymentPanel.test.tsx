@@ -1,15 +1,37 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PaymentPanel } from './PaymentPanel';
 import { CounterWorkspace } from './CounterWorkspace';
 import type { EmployeeIdentity, ShiftSummary, TerminalLocation } from '../../auth/types';
 import { resetPreviewOrderSequence } from './paymentReceipt';
 import type { CartLine } from './cartTypes';
+import { fetchPublishedCatalogue, type CatalogueSnapshot } from '../catalogue/catalogueClient';
 
 vi.mock('../../preview/uiPreviewMode', () => ({
   isUiPreviewMode: vi.fn(() => true),
 }));
+
+vi.mock('../catalogue/catalogueClient', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../catalogue/catalogueClient')>();
+  return { ...original, fetchPublishedCatalogue: vi.fn() };
+});
+
+const sharedCatalogue: CatalogueSnapshot = {
+  revision: 1,
+  categories: [
+    { id: 'coffee', slug: 'coffee', name: 'Coffee', imageUrl: null, sortOrder: 10, isActive: true, itemCount: 1 },
+  ],
+  items: [{
+    id: 'latte', categoryId: 'coffee', categoryName: 'Coffee', slug: 'latte', sku: 'LATTE', kind: 'product',
+    name: 'Latte', description: '', basePriceSen: 1050, isAvailable: true, isPublished: true,
+    isFeatured: false, isBestSeller: false, isStudentEligible: false, imageUrl: null, volumeMl: null,
+    prepRoute: 'bar', sortOrder: 10, compatibleAddOnIds: [], variants: [
+      { id: 'medium', code: 'medium', label: 'Medium', priceDeltaSen: 0, isDefault: true, isAvailable: true, sortOrder: 10 },
+    ],
+  }],
+};
 
 const employee: EmployeeIdentity = {
   id: 'e1',
@@ -56,7 +78,7 @@ const lines: CartLine[] = [
   },
 ];
 
-describe('PaymentPanel', () => {
+describe('detached preview PaymentPanel', () => {
   beforeEach(() => {
     resetPreviewOrderSequence(10521);
   });
@@ -112,30 +134,32 @@ describe('PaymentPanel', () => {
   });
 });
 
-describe('CounterWorkspace completed sale', () => {
-  it('hides Pay after successful payment', async () => {
+describe('CounterWorkspace authoritative payment boundary', () => {
+  it('routes the active POS sale to server placement instead of the preview tender', async () => {
     const user = userEvent.setup();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(['pos-catalogue'], sharedCatalogue);
+    vi.mocked(fetchPublishedCatalogue).mockResolvedValue(sharedCatalogue);
 
     render(
-      <CounterWorkspace
-        employee={employee}
-        location={location}
-        shift={shift}
-        onLock={() => {}}
-        onCloseRequest={() => {}}
-        onLogout={() => {}}
-        connectionState="online"
-        onConnectionStateChange={() => {}}
-      />,
+      <QueryClientProvider client={queryClient}>
+        <CounterWorkspace
+          employee={employee}
+          location={location}
+          shift={shift}
+          onLock={() => {}}
+          onCloseRequest={() => {}}
+          onLogout={() => {}}
+          connectionState="online"
+          onConnectionStateChange={() => {}}
+        />
+      </QueryClientProvider>,
     );
 
-    await user.click(screen.getByRole('button', { name: /salted caramel latte/i }));
+    await user.click(await screen.findByRole('button', { name: /latte/i }));
     await user.click(screen.getByRole('button', { name: /add to order/i }));
-    await user.click(screen.getByRole('button', { name: /^pay$/i }));
-    await user.click(screen.getByRole('button', { name: /^exact$/i }));
-    await user.click(screen.getByRole('button', { name: /confirm payment/i }));
-
+    expect(screen.getByRole('button', { name: /review & place/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^pay$/i })).not.toBeInTheDocument();
-    expect(document.querySelector('.order-ribbon__pay')).toHaveTextContent(/new sale/i);
+    expect(screen.queryByRole('button', { name: /^exact$|confirm payment/i })).not.toBeInTheDocument();
   });
 });

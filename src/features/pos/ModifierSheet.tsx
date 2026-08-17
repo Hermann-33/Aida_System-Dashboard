@@ -1,13 +1,30 @@
 import { useEffect, useState } from 'react';
-import type { UiConceptModifierGroup } from '../../preview/fixtures/catalog';
 import { formatRmFromSen } from '../../shared/formatting/money';
 import { Button } from '@/components/ui/button';
+
+export type ModifierOption = {
+  id: string;
+  label: string;
+  priceDeltaSen: number;
+  available?: boolean;
+  isDefault?: boolean;
+};
+
+export type ModifierGroup = {
+  id: string;
+  name: string;
+  required: boolean;
+  min: number;
+  max: number;
+  help?: string;
+  options: ModifierOption[];
+};
 
 interface Props {
   open: boolean;
   itemName: string;
   basePriceSen: number;
-  groups: UiConceptModifierGroup[];
+  groups: ModifierGroup[];
   onConfirm: (selections: Record<string, string[]>, unitPriceSen: number, summary: string) => void;
   onClose: () => void;
 }
@@ -19,9 +36,9 @@ export function ModifierSheet({ open, itemName, basePriceSen, groups, onConfirm,
     if (open) {
       const initial: Record<string, string[]> = {};
       for (const g of groups) {
-        if (g.id === 'size') {
-          const medium = g.options.find((o) => o.id === 'm' && o.available !== false);
-          initial[g.id] = medium ? [medium.id] : g.options[0] ? [g.options[0].id] : [];
+        const defaultOption = g.options.find((option) => option.isDefault && option.available !== false);
+        if (defaultOption) {
+          initial[g.id] = [defaultOption.id];
         } else if (g.required && g.options.find((o) => o.available !== false)) {
           initial[g.id] = [g.options.find((o) => o.available !== false)!.id];
         } else {
@@ -34,7 +51,7 @@ export function ModifierSheet({ open, itemName, basePriceSen, groups, onConfirm,
 
   if (!open) return null;
 
-  function toggleOption(group: UiConceptModifierGroup, optionId: string, available: boolean) {
+  function toggleOption(group: ModifierGroup, optionId: string, available: boolean) {
     if (!available) return;
     setSelections((prev) => {
       const current = prev[group.id] || [];
@@ -98,7 +115,7 @@ export function ModifierSheet({ open, itemName, basePriceSen, groups, onConfirm,
             {itemName}
           </h2>
           <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            UI benchmark — modifier contract pending
+            Shared catalogue options — checkout total remains an estimate
           </p>
         </header>
 

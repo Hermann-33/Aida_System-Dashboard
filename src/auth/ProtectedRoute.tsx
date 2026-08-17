@@ -12,7 +12,7 @@ import { IdleLockModal } from '../components/IdleLockModal';
 
 interface ProtectedRouteProps {
   product: ProductScope;
-  /** When true, allow anonymous access (employee welcome / enrol). */
+  /** When true, allow anonymous access (employee/admin login surfaces). */
   allowAnonymous?: boolean;
 }
 
@@ -22,7 +22,7 @@ export function ProtectedRoute({ product, allowAnonymous = false }: ProtectedRou
   const location = useLocation();
 
   useEffect(() => {
-    void refreshEmployeeSessionFromServer().then(() => setReady(true));
+    void refreshEmployeeSessionFromServer().finally(() => setReady(true));
   }, []);
 
   if (!ready) {
@@ -51,7 +51,18 @@ export function ProtectedRoute({ product, allowAnonymous = false }: ProtectedRou
       );
     }
     if (session.status !== 'authenticated' || !session.identity) {
-      return <Navigate to="/employee" replace state={{ from: location.pathname }} />;
+      const loginPath = product === 'admin' ? '/admin/login' : '/employee';
+      return (
+        <Navigate
+          to={loginPath}
+          replace
+          state={{
+            from: `${location.pathname}${location.search}`,
+            reason: product === 'admin' ? 'ADMIN_SIGN_IN_REQUIRED' : 'EMPLOYEE_SIGN_IN_REQUIRED',
+            sessionErrorCode: session.lastErrorCode,
+          }}
+        />
+      );
     }
     if (!canAccessProduct(session.identity, product)) {
       return <Navigate to="/unauthorized" replace />;

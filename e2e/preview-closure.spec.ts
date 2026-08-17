@@ -74,6 +74,43 @@ test.describe('Preview closure gate (no backend)', () => {
     expect(hits).toEqual([]);
   });
 
+  test('preview Manager keeps Admin routes mounted without privileged-session loops', async ({ page }) => {
+    const privilegedRequests: string[] = [];
+    const responseStatuses = new Map<string, number>();
+    page.on('request', (request) => {
+      const path = new URL(request.url()).pathname;
+      if (path === '/api/v1/admin/members' || path === '/api/v1/admin/catalogue') {
+        privilegedRequests.push(path);
+      }
+    });
+    page.on('response', (response) => {
+      const path = new URL(response.url()).pathname;
+      if (path.startsWith('/api/v1/')) responseStatuses.set(path, response.status());
+    });
+
+    await enrolPreview(page);
+    await login(page, 'siti');
+    await expect(page).toHaveURL(/\/admin$/);
+
+    await page.goto('/admin/reports/members');
+    await expect(page).toHaveURL(/\/admin\/reports\/members$/);
+    await expect(page.getByText(/live member data requires a real aida admin session/i)).toBeVisible();
+    await page.waitForTimeout(750);
+    await expect(page).toHaveURL(/\/admin\/reports\/members$/);
+
+    await page.goto('/admin/catalogue/menu');
+    await expect(page).toHaveURL(/\/admin\/catalogue\/menu$/);
+    await expect(page.getByText(/live published catalogue in read-only mode/i)).toBeVisible();
+    await expect(page.getByText('Latte').first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: /add item/i })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /edit/i })).toHaveCount(0);
+    await page.waitForTimeout(750);
+    await expect(page).toHaveURL(/\/admin\/catalogue\/menu$/);
+
+    expect(privilegedRequests).toEqual([]);
+    expect(responseStatuses.get('/api/v1/catalogue')).toBe(200);
+  });
+
   test('dual-role requires explicit workspace selection', async ({ page }) => {
     await enrolPreview(page);
     await login(page, 'amir');
@@ -99,8 +136,25 @@ test.describe('Preview closure gate (no backend)', () => {
 
   test('runtime network isolation across POS open-shift', async ({ page }) => {
     const hits: string[] = [];
+    await page.route('**/api/v1/catalogue', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        revision: 1,
+        categories: [
+          { id: 'coffee', slug: 'coffee', name: 'Coffee', imageUrl: null, sortOrder: 10, isActive: true, itemCount: 1 },
+        ],
+        items: [{
+          id: 'latte', categoryId: 'coffee', categoryName: 'Coffee', slug: 'latte', sku: 'LATTE', kind: 'product',
+          name: 'Latte', description: '', basePriceSen: 1050, isAvailable: true, isPublished: true,
+          isFeatured: false, isBestSeller: false, isStudentEligible: false, imageUrl: null, volumeMl: null,
+          prepRoute: 'bar', sortOrder: 10, compatibleAddOnIds: [], variants: [],
+        }],
+      }),
+    }));
     page.on('request', (req) => {
-      if (FORBIDDEN.test(req.url())) hits.push(req.url());
+      const isSharedCatalogue = new URL(req.url()).pathname === '/api/v1/catalogue';
+      if (FORBIDDEN.test(req.url()) && !isSharedCatalogue) hits.push(req.url());
     });
     await enrolPreview(page);
     await login(page, 'nadia');
@@ -109,5 +163,92 @@ test.describe('Preview closure gate (no backend)', () => {
     await page.getByRole('button', { name: /open shift/i }).click();
     await expect(page.getByText(/new sale|menu/i).first()).toBeVisible({ timeout: 15_000 });
     expect(hits, `Forbidden: ${hits.join(', ')}`).toEqual([]);
+  });
+
+  test('authoritative POS quote, placement and live status UI use the same-origin order contract', async ({ page }) => {
+    const itemId = '11111111-1111-4111-8111-111111111111';
+    const order = {
+      id: '44444444-4444-4444-8444-444444444444', orderNumber: 100031, source: 'pos',
+      customerUserId: null, memberId: null, fulfillmentType: 'asap', requestedPickupAt: null,
+      status: 'confirmed', statusVersion: 1, currency: 'MYR', pricingVersion: 1,
+      subtotalSen: 1450, totalSen: 1450, createdAt: '2026-08-14T00:00:00Z',
+      updatedAt: '2026-08-14T00:00:00Z', statusUpdatedAt: '2026-08-14T00:00:00Z',
+      preparingAt: null, readyAt: null, completedAt: null, cancelledAt: null,
+      lines: [{
+        id: 'line-1', lineNumber: 1, itemId, sku: 'CF-LAT', name: 'Latte', prepRoute: 'bar',
+        basePriceSen: 1450, variant: null, addOns: [], addOnTotalSen: 0, unitPriceSen: 1450,
+        quantity: 1, lineTotalSen: 1450, note: null,
+      }],
+    };
+    let quotePayload: Record<string, unknown> | null = null;
+    let statusPayload: Record<string, unknown> | null = null;
+
+    await page.route('**/api/v1/catalogue', (route) => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify({
+        revision: 15,
+        categories: [{ id: 'coffee', slug: 'coffee', name: 'Coffee', imageUrl: null, sortOrder: 10, isActive: true, itemCount: 1 }],
+        items: [{
+          id: itemId, categoryId: 'coffee', categoryName: 'Coffee', slug: 'latte', sku: 'CF-LAT', kind: 'product',
+          name: 'Latte', description: '', basePriceSen: 1, isAvailable: true, isPublished: true,
+          isFeatured: false, isBestSeller: false, isStudentEligible: false, imageUrl: null, volumeMl: null,
+          prepRoute: 'bar', sortOrder: 10, compatibleAddOnIds: [], variants: [],
+        }],
+      }),
+    }));
+    await page.route('**/api/v1/orders/policy', (route) => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify({
+        serverNow: '2026-08-14T00:00:00Z', timezone: 'Asia/Kuala_Lumpur', scheduleEnabled: true,
+        minimumLeadMinutes: 15, slotIntervalMinutes: 15, maximumAdvanceDays: 7,
+      }),
+    }));
+    await page.route('**/api/v1/orders/quote', async (route) => {
+      quotePayload = route.request().postDataJSON();
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        pricingVersion: 1, currency: 'MYR', subtotalSen: 1450, totalSen: 1450,
+        fulfillmentType: 'asap', requestedPickupAt: null, serverNow: '2026-08-14T00:00:00Z',
+        schedulePolicy: { timezone: 'Asia/Kuala_Lumpur', scheduleEnabled: true, minimumLeadMinutes: 15, slotIntervalMinutes: 15, maximumAdvanceDays: 7 },
+        lines: order.lines,
+      }) });
+    });
+    await page.route('**/api/v1/orders/place', (route) => route.fulfill({
+      status: 201, contentType: 'application/json', body: JSON.stringify(order),
+    }));
+    await page.route(/\/api\/v1\/orders\?.*/, (route) => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify([order]),
+    }));
+    await page.route('**/api/v1/orders/detail**', (route) => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify(order),
+    }));
+    await page.route('**/api/v1/orders/status', async (route) => {
+      statusPayload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ ...order, status: 'preparing', statusVersion: 2 }),
+      });
+    });
+
+    await enrolPreview(page);
+    await login(page, 'nadia');
+    const openShift = page.getByRole('button', { name: /^open shift$/i });
+    await expect(openShift).toBeVisible({ timeout: 15_000 });
+    await page.getByLabel(/opening float/i).fill('50');
+    await openShift.click();
+    await expect(page.getByRole('button', { name: /latte/i })).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('button', { name: /latte/i }).click();
+    await page.getByRole('button', { name: /add to order/i }).click();
+    await page.getByRole('button', { name: /review & place/i }).click();
+    await page.getByRole('button', { name: /review authoritative total/i }).click();
+    await expect(page.getByText('RM 14.50')).toBeVisible();
+    expect(JSON.stringify(quotePayload)).not.toMatch(/price|total|name|member|status/i);
+    await page.getByRole('button', { name: /place order/i }).click();
+    await expect(page.getByRole('heading', { name: /order #100031/i })).toBeVisible();
+    await expect(page.getByText(/pay at counter.*unpaid/i)).toBeVisible();
+
+    await page.getByRole('button', { name: /^orders$/i }).click();
+    await expect(page.getByRole('cell', { name: '#100031' })).toBeVisible();
+    await page.getByRole('button', { name: 'Detail', exact: true }).click();
+    await page.getByRole('button', { name: /start preparing/i }).click();
+    await expect(page.getByRole('status')).toContainText(/now preparing/i);
+    expect(statusPayload).toEqual({ orderId: order.id, toStatus: 'preparing', expectedVersion: 1 });
   });
 });

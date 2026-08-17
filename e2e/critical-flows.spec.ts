@@ -8,17 +8,6 @@ test.beforeEach(() => {
   test.skip(PREVIEW_ONLY, 'API-backed Phase 2B E2E skipped in preview-only closure gate');
 });
 
-function parseCookies(setCookie: string[] | null) {
-  const jar: Record<string, string> = {};
-  for (const line of setCookie || []) {
-    const [pair] = line.split(';');
-    const idx = pair.indexOf('=');
-    if (idx === -1) continue;
-    jar[pair.slice(0, idx).trim()] = pair.slice(idx + 1).trim();
-  }
-  return jar;
-}
-
 async function adminLogin(request: APIRequestContext) {
   const res = await request.post(`${API}/api/v1/auth/employee/login`, {
     data: { username: 'admin', password: 'admin123' },
