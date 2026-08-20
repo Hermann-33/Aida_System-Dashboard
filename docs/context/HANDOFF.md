@@ -134,11 +134,11 @@ The local execution environment also has no Flutter/Dart/Codex binary and outbou
 
 ## Dashboard documentation sync
 
-Matching Dashboard branch:
+Matching Dashboard branch already exists:
 
 `codex/task-ui-redesign-003-post-merge-audit`
 
-The customer redesign/governance documents are mirrored there without Dashboard runtime changes. Repository-local customer screenshots do not need mirroring.
+The customer redesign/governance documents are to be mirrored there without Dashboard runtime changes. Repository-local customer screenshots do not need mirroring.
 
 ## Prior implementation evidence
 
