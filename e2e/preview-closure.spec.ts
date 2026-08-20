@@ -165,11 +165,60 @@ test.describe('Preview closure gate (no backend)', () => {
     expect(hits, `Forbidden: ${hits.join(', ')}`).toEqual([]);
   });
 
+  test('scheduled operations are separated by workload and remain usable on a narrow counter viewport', async ({ page }, testInfo) => {
+    const consoleErrors: string[] = [];
+    page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+    const base = {
+      source: 'customer', customerUserId: 'customer-1', memberId: 'member-1', fulfillmentType: 'scheduled',
+      serverNow: '2026-08-20T14:00:00Z', statusVersion: 3, currency: 'MYR', pricingVersion: 1,
+      subtotalSen: 1200, totalSen: 1200, createdAt: '2026-08-20T12:00:00Z', updatedAt: '2026-08-20T12:00:00Z',
+      statusUpdatedAt: '2026-08-20T12:00:00Z', preparingAt: null, readyAt: null, completedAt: null, cancelledAt: null,
+      lines: [{ id: 'line-1', lineNumber: 1, itemId: 'item-1', sku: 'CF-LAT', name: 'Latte', prepRoute: 'bar', basePriceSen: 1200, variant: null, addOns: [], addOnTotalSen: 0, unitPriceSen: 1200, quantity: 1, lineTotalSen: 1200, note: null }],
+    };
+    const orders = [
+      { ...base, id: 'overdue', orderNumber: 100009, status: 'scheduled', scheduleState: 'overdue', prepareAt: '2026-08-20T13:30:00Z', requestedPickupAt: '2026-08-20T13:45:00Z' },
+      { ...base, id: 'due', orderNumber: 100010, status: 'scheduled', scheduleState: 'due', prepareAt: '2026-08-20T13:55:00Z', requestedPickupAt: '2026-08-20T14:10:00Z' },
+      { ...base, id: 'future', orderNumber: 100011, status: 'scheduled', scheduleState: 'future', prepareAt: '2026-08-20T15:00:00Z', requestedPickupAt: '2026-08-20T15:15:00Z' },
+      { ...base, id: 'ready', orderNumber: 100012, fulfillmentType: 'asap', status: 'ready', scheduleState: null, prepareAt: null, requestedPickupAt: null, readyAt: '2026-08-20T13:50:00Z' },
+      { ...base, id: 'complete', orderNumber: 100013, fulfillmentType: 'asap', status: 'completed', scheduleState: null, prepareAt: null, requestedPickupAt: null, completedAt: '2026-08-20T13:40:00Z' },
+    ];
+    let statusPayload: Record<string, unknown> | null = null;
+    await page.route('**/api/v1/catalogue', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ revision: 42, categories: [], items: [] }) }));
+    await page.route(/\/api\/v1\/orders\?.*/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(orders) }));
+    await page.route('**/api/v1/orders/status', async (route) => {
+      statusPayload = route.request().postDataJSON();
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...orders[0], status: 'preparing', scheduleState: null, prepareAt: null, statusVersion: 4, preparingAt: '2026-08-20T14:00:00Z' }) });
+    });
+    await enrolPreview(page);
+    await login(page, 'nadia');
+    await page.getByLabel(/opening float/i).fill('50');
+    await page.getByRole('button', { name: /open shift/i }).click();
+    await page.getByRole('button', { name: /^orders$/i }).click();
+    await expect(page.getByText('#100009')).toBeVisible();
+    await expect(page.getByText('Overdue')).toBeVisible();
+    await expect(page.getByText('#100011')).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath('orders-active-desktop.png'), fullPage: true });
+    await page.getByRole('button', { name: /start preparing/i }).first().click();
+    expect(statusPayload).toEqual({ orderId: 'overdue', toStatus: 'preparing', expectedVersion: 3 });
+    await page.getByRole('tab', { name: /scheduled/i }).click();
+    await expect(page.getByText('#100011')).toBeVisible();
+    await page.getByRole('tab', { name: /ready/i }).click();
+    await expect(page.getByText('#100012')).toBeVisible();
+    await page.getByRole('tab', { name: /history/i }).click();
+    await expect(page.getByText('#100013')).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByRole('tablist', { name: /order workload/i })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('orders-history-mobile.png'), fullPage: true });
+    expect(consoleErrors).toEqual([]);
+  });
+
   test('authoritative POS quote, placement and live status UI use the same-origin order contract', async ({ page }) => {
     const itemId = '11111111-1111-4111-8111-111111111111';
     const order = {
       id: '44444444-4444-4444-8444-444444444444', orderNumber: 100031, source: 'pos',
       customerUserId: null, memberId: null, fulfillmentType: 'asap', requestedPickupAt: null,
+      prepareAt: null, serverNow: '2026-08-14T00:00:00Z', scheduleState: null,
       status: 'confirmed', statusVersion: 1, currency: 'MYR', pricingVersion: 1,
       subtotalSen: 1450, totalSen: 1450, createdAt: '2026-08-14T00:00:00Z',
       updatedAt: '2026-08-14T00:00:00Z', statusUpdatedAt: '2026-08-14T00:00:00Z',
@@ -198,7 +247,7 @@ test.describe('Preview closure gate (no backend)', () => {
     await page.route('**/api/v1/orders/policy', (route) => route.fulfill({
       status: 200, contentType: 'application/json', body: JSON.stringify({
         serverNow: '2026-08-14T00:00:00Z', timezone: 'Asia/Kuala_Lumpur', scheduleEnabled: true,
-        minimumLeadMinutes: 15, slotIntervalMinutes: 15, maximumAdvanceDays: 7,
+        minimumLeadMinutes: 15, preparationLeadMinutes: 15, slotIntervalMinutes: 15, maximumAdvanceDays: 7,
       }),
     }));
     await page.route('**/api/v1/orders/quote', async (route) => {
@@ -206,7 +255,7 @@ test.describe('Preview closure gate (no backend)', () => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
         pricingVersion: 1, currency: 'MYR', subtotalSen: 1450, totalSen: 1450,
         fulfillmentType: 'asap', requestedPickupAt: null, serverNow: '2026-08-14T00:00:00Z',
-        schedulePolicy: { timezone: 'Asia/Kuala_Lumpur', scheduleEnabled: true, minimumLeadMinutes: 15, slotIntervalMinutes: 15, maximumAdvanceDays: 7 },
+        schedulePolicy: { timezone: 'Asia/Kuala_Lumpur', scheduleEnabled: true, minimumLeadMinutes: 15, preparationLeadMinutes: 15, slotIntervalMinutes: 15, maximumAdvanceDays: 7 },
         lines: order.lines,
       }) });
     });
@@ -245,8 +294,7 @@ test.describe('Preview closure gate (no backend)', () => {
     await expect(page.getByText(/pay at counter.*unpaid/i)).toBeVisible();
 
     await page.getByRole('button', { name: /^orders$/i }).click();
-    await expect(page.getByRole('cell', { name: '#100031' })).toBeVisible();
-    await page.getByRole('button', { name: 'Detail', exact: true }).click();
+    await expect(page.getByText('#100031', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: /start preparing/i }).click();
     await expect(page.getByRole('status')).toContainText(/now preparing/i);
     expect(statusPayload).toEqual({ orderId: order.id, toStatus: 'preparing', expectedVersion: 1 });

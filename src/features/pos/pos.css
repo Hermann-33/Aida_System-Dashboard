@@ -772,6 +772,36 @@
   box-shadow: var(--aida-shadow-lg);
 }
 
+.order-workload-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aida-space-4);
+  border: 1px solid var(--aida-outline);
+  border-radius: var(--aida-radius);
+  background: var(--aida-surface);
+  padding: var(--aida-space-4);
+  box-shadow: var(--aida-shadow);
+}
+
+.order-workload-card--due {
+  border-left: 5px solid var(--aida-warning);
+  background: color-mix(in srgb, var(--aida-warning) 7%, var(--aida-surface));
+}
+
+.order-workload-card--overdue {
+  border-left: 5px solid var(--aida-error);
+  background: color-mix(in srgb, var(--aida-error) 7%, var(--aida-surface));
+}
+
+@media (min-width: 768px) {
+  .order-workload-card {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--aida-space-5);
+  }
+}
+
 @media (max-height: 800px), (max-width: 1400px) {
   .modifier-sheet {
     max-height: min(90vh, calc(100vh - 2rem));

@@ -4,6 +4,7 @@ import type { CartLine } from '../pos/cartTypes';
 import {
   LEGAL_NEXT_STATUSES,
   buildOrderIntent,
+  fetchOrderingPolicy,
   fetchOrders,
   generateScheduleSlots,
   placeOrder,
@@ -51,7 +52,10 @@ describe('order client trust boundary', () => {
   it('uses employee same-origin endpoints for quote, place and queue', async () => {
     vi.mocked(employeeFetch)
       .mockResolvedValueOnce(new Response(JSON.stringify({ totalSen: 1450 }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'order-1', totalSen: 1450 }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'order-1', orderNumber: 100001, totalSen: 1450, prepareAt: null,
+        serverNow: '2026-08-20T12:00:00Z', scheduleState: null,
+      }), { status: 201 }))
       .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
 
     const intent = buildOrderIntent(lines, 'asap');
@@ -70,11 +74,30 @@ describe('order client trust boundary', () => {
       timezone: 'Asia/Kuala_Lumpur',
       scheduleEnabled: true,
       minimumLeadMinutes: 15,
+      preparationLeadMinutes: 15,
       slotIntervalMinutes: 15,
       maximumAdvanceDays: 1,
     });
     expect(slots[0]).toBe('2026-08-14T00:30:00.000Z');
     expect(new Date(slots.at(-1)!).getTime()).toBeLessThanOrEqual(new Date('2026-08-15T00:02:30.000Z').getTime());
+  });
+
+  it('parses trusted preparation policy and rejects a missing preparation lead', async () => {
+    const valid = {
+      serverNow: '2026-08-20T12:00:00Z', timezone: 'Asia/Kuala_Lumpur', scheduleEnabled: true,
+      minimumLeadMinutes: 15, preparationLeadMinutes: 15, slotIntervalMinutes: 15, maximumAdvanceDays: 7,
+    };
+    await expect(fetchOrderingPolicy(vi.fn().mockResolvedValue(new Response(JSON.stringify(valid))))).resolves.toEqual(valid);
+    const { preparationLeadMinutes: _omitted, ...invalid } = valid;
+    await expect(fetchOrderingPolicy(vi.fn().mockResolvedValue(new Response(JSON.stringify(invalid))))).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
+  });
+
+  it('rejects malformed authoritative schedule classifications on order snapshots', async () => {
+    vi.mocked(employeeFetch).mockResolvedValueOnce(new Response(JSON.stringify([{
+      id: 'order-1', orderNumber: 100001, prepareAt: '2026-08-20T12:00:00Z',
+      serverNow: '2026-08-20T12:15:00Z', scheduleState: 'preparing-soon',
+    }])));
+    await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
   });
 
   it('exposes only legal versioned status progressions and terminal states', () => {
