@@ -5,6 +5,7 @@ export const ORDER_QUERY_KEY = ['employee-orders'] as const;
 export const ORDER_POLL_INTERVAL_MS = 2_500;
 
 export type FulfillmentType = 'asap' | 'scheduled';
+export type ScheduleState = 'future' | 'due' | 'overdue';
 export type OrderStatus =
   | 'confirmed'
   | 'scheduled'
@@ -36,6 +37,7 @@ export type OrderingPolicy = {
   timezone: string;
   scheduleEnabled: boolean;
   minimumLeadMinutes: number;
+  preparationLeadMinutes: number;
   slotIntervalMinutes: number;
   maximumAdvanceDays: number;
 };
@@ -89,6 +91,9 @@ export type OrderSnapshot = {
   memberId: string | null;
   fulfillmentType: FulfillmentType;
   requestedPickupAt: string | null;
+  prepareAt: string | null;
+  serverNow: string;
+  scheduleState: ScheduleState | null;
   status: OrderStatus;
   statusVersion: number;
   currency: 'MYR';
@@ -139,6 +144,52 @@ async function parseResponse<T>(response: Response, fallback: string): Promise<T
     throw new OrderClientError(`${fallback} The response was invalid.`, 502, 'ORDER_RESPONSE_INVALID');
   }
   return body as T;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isIsoTimestamp(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && Number.isFinite(Date.parse(value));
+}
+
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function invalidResponse(message: string): never {
+  throw new OrderClientError(message, 502, 'ORDER_RESPONSE_INVALID');
+}
+
+export function parseOrderingPolicy(value: unknown): OrderingPolicy {
+  if (!isRecord(value)
+    || !isIsoTimestamp(value.serverNow)
+    || typeof value.timezone !== 'string'
+    || typeof value.scheduleEnabled !== 'boolean'
+    || !isNonNegativeNumber(value.minimumLeadMinutes)
+    || !isNonNegativeNumber(value.preparationLeadMinutes)
+    || !isNonNegativeNumber(value.slotIntervalMinutes)
+    || value.slotIntervalMinutes === 0
+    || !isNonNegativeNumber(value.maximumAdvanceDays)) {
+    return invalidResponse('Ordering policy response is invalid.');
+  }
+  return value as OrderingPolicy;
+}
+
+export function parseOrderSnapshot(value: unknown): OrderSnapshot {
+  if (!isRecord(value)
+    || typeof value.id !== 'string'
+    || typeof value.orderNumber !== 'number'
+    || !isIsoTimestamp(value.serverNow)
+    || !(value.prepareAt === null || isIsoTimestamp(value.prepareAt))
+    || !(value.scheduleState === null
+      || value.scheduleState === 'future'
+      || value.scheduleState === 'due'
+      || value.scheduleState === 'overdue')) {
+    return invalidResponse('Order response is invalid.');
+  }
+  return value as OrderSnapshot;
 }
 
 export function cartToOrderItems(lines: CartLine[]): OrderSelectionLine[] {
@@ -196,7 +247,7 @@ export async function fetchOrderingPolicy(fetcher: typeof fetch = fetch): Promis
     credentials: 'include',
     headers: { Accept: 'application/json' },
   });
-  return parseResponse<OrderingPolicy>(response, 'Ordering policy is unavailable.');
+  return parseOrderingPolicy(await parseResponse<unknown>(response, 'Ordering policy is unavailable.'));
 }
 
 export async function quoteOrder(payload: OrderIntentPayload): Promise<OrderQuote> {
@@ -212,7 +263,7 @@ export async function placeOrder(payload: OrderPlacementPayload): Promise<OrderS
     method: 'POST',
     body: JSON.stringify(payload),
   });
-  return parseResponse<OrderSnapshot>(response, 'Unable to place this order.');
+  return parseOrderSnapshot(await parseResponse<unknown>(response, 'Unable to place this order.'));
 }
 
 export async function fetchOrders(statuses?: OrderStatus[]): Promise<OrderSnapshot[]> {
@@ -224,14 +275,14 @@ export async function fetchOrders(statuses?: OrderStatus[]): Promise<OrderSnapsh
   if (!Array.isArray(orders)) {
     throw new OrderClientError('Orders response is invalid.', 502, 'ORDERS_INVALID');
   }
-  return orders as OrderSnapshot[];
+  return orders.map(parseOrderSnapshot);
 }
 
 export async function fetchOrderDetail(orderId: string): Promise<OrderSnapshot> {
   const response = await employeeFetch(`/api/v1/orders/detail?id=${encodeURIComponent(orderId)}`, {
     method: 'GET',
   });
-  return parseResponse<OrderSnapshot>(response, 'Unable to load order detail.');
+  return parseOrderSnapshot(await parseResponse<unknown>(response, 'Unable to load order detail.'));
 }
 
 export async function transitionOrderStatus(input: {
@@ -244,7 +295,7 @@ export async function transitionOrderStatus(input: {
     method: 'POST',
     body: JSON.stringify(input),
   });
-  return parseResponse<OrderSnapshot>(response, 'Unable to update order status.');
+  return parseOrderSnapshot(await parseResponse<unknown>(response, 'Unable to update order status.'));
 }
 
 export const LEGAL_NEXT_STATUSES: Readonly<Record<OrderStatus, readonly OrderStatus[]>> = {

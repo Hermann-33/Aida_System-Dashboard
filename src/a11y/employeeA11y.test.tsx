@@ -29,17 +29,19 @@ describe('Accessibility smoke (Phase 2B Closure)', () => {
     vi.unstubAllGlobals();
   });
 
-  it('terminal activation has labelled heading and alert-ready form', async () => {
+  it('live employee access has a labelled sign-in form without terminal enrolment', async () => {
     render(
       <MemoryRouter>
         <EmployeeWelcomePage />
       </MemoryRouter>,
     );
-    const heading = await screen.findByRole('heading', { name: /activate this terminal/i });
+    const heading = await screen.findByRole('heading', { name: /sign in/i });
     expect(heading).toBeInTheDocument();
-    expect(screen.getByLabelText(/enrolment code/i)).toBeInTheDocument();
-    const btn = screen.getByRole('button', { name: /activate terminal/i });
+    expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/enrolment code/i)).not.toBeInTheDocument();
+    const btn = screen.getByRole('button', { name: /^sign in$/i });
     expect(btn).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining('/terminals/'), expect.anything());
   });
 
   it('idle-lock modal has dialog, aria-modal, and PIN label', () => {

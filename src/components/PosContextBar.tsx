@@ -9,6 +9,7 @@ interface Props {
   location: TerminalLocation | null;
   shift: ShiftSummary | null;
   connection?: ConnectionState;
+  operationalMode?: 'preview' | 'live';
 }
 
 const CONNECTION_LABEL: Record<ConnectionState, string> = {
@@ -31,7 +32,7 @@ const SHIFT_CLASS: Record<string, string> = {
   closed: 'status-pill--info',
 };
 
-export function PosContextBar({ employee, location, shift, connection = 'online' }: Props) {
+export function PosContextBar({ employee, location, shift, connection = 'online', operationalMode = 'preview' }: Props) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const shiftStarted = shift?.openedAt ? formatKlTime(shift.openedAt) : null;
 
@@ -55,10 +56,12 @@ export function PosContextBar({ employee, location, shift, connection = 'online'
 
       <span aria-hidden="true" className="h-6 w-px bg-white/15" />
 
-      <span className={`status-pill ${SHIFT_CLASS[shift?.status ?? ''] ?? 'status-pill--info'}`}>
-        Shift {shift?.status || 'none'}
-      </span>
-      <span className={`status-pill ${CONNECTION_CLASS[connection]}`}>{CONNECTION_LABEL[connection]}</span>
+      {operationalMode === 'preview' ? (
+        <>
+          <span className={`status-pill ${SHIFT_CLASS[shift?.status ?? ''] ?? 'status-pill--info'}`}>Shift {shift?.status || 'none'}</span>
+          <span className={`status-pill ${CONNECTION_CLASS[connection]}`}>{CONNECTION_LABEL[connection]}</span>
+        </>
+      ) : <span className="status-pill status-pill--ok">Live · single café</span>}
 
       <button
         type="button"
@@ -83,17 +86,11 @@ export function PosContextBar({ employee, location, shift, connection = 'online'
               <strong className="font-bold text-[var(--aida-gold)]">Access</strong> Global manager
             </span>
           )}
-          <span>
-            <strong className="font-bold text-[var(--aida-gold)]">Branch</strong>{' '}
-            {location?.branchName || location?.branchCode || '—'}
-          </span>
-          <span>
-            <strong className="font-bold text-[var(--aida-gold)]">Sales point</strong>{' '}
-            {location?.salesPointName || location?.salesPointCode || '—'}
-          </span>
-          <span>
-            <strong className="font-bold text-[var(--aida-gold)]">Terminal</strong> {location?.terminalCode || '—'}
-          </span>
+          {operationalMode === 'preview' ? <>
+            <span><strong className="font-bold text-[var(--aida-gold)]">Branch</strong>{' '}{location?.branchName || location?.branchCode || '—'}</span>
+            <span><strong className="font-bold text-[var(--aida-gold)]">Sales point</strong>{' '}{location?.salesPointName || location?.salesPointCode || '—'}</span>
+            <span><strong className="font-bold text-[var(--aida-gold)]">Terminal</strong> {location?.terminalCode || '—'}</span>
+          </> : <span><strong className="font-bold text-[var(--aida-gold)]">Scope</strong> Global staff order queue; terminal and shift authority deferred</span>}
           {shiftStarted && (
             <span>
               <strong className="font-bold text-[var(--aida-gold)]">Shift started</strong> {shiftStarted}

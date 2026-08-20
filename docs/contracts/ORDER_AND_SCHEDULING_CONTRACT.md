@@ -202,6 +202,8 @@ OrderSnapshot.scheduleState
 
 ## Required operational Dashboard classification
 
+Implemented in the Dashboard task branch on 2026-08-21. The frontend consumes these server classifications directly and rejects malformed authoritative fields.
+
 AIDA's intended POS workload model is:
 
 ### Active
@@ -228,6 +230,8 @@ AIDA's intended POS workload model is:
 
 A due/overdue order keeps persisted `status=scheduled` until staff explicitly selects **Start preparing**. Existing optimistic-concurrency/version-conflict behavior remains mandatory.
 
+The Dashboard implementation sorts Active as overdue, due, preparing, confirmed; sorts future scheduled work by `prepareAt` then `requestedPickupAt`; groups future presentation into Today/Tomorrow/Later using Malaysia time and the snapshot `serverNow`; and refetches authoritative queue/detail after a version conflict. None of these presentation operations introduces a status or performs a timed mutation.
+
 ## Payment boundary
 
 There is still no trusted payment processor/payment-settlement state. Current flow remains explicit `Pay at counter` / unpaid. Fulfilment completion does not prove payment settlement.
@@ -237,6 +241,8 @@ There is still no trusted payment processor/payment-settlement state. Current fl
 Current order authorization still allows staff-or-above to see the global queue because branch-scoped backend authority is deferred.
 
 The Dashboard must not block this accepted live Sale/Orders path on fake/nonexistent terminal/shift authority. Terminal, sales-point, branch assignment and shifts remain separate trusted domains. Preview simulation may remain preview-only.
+
+The live Dashboard runtime implements this boundary by entering Sale/Orders immediately after trusted employee authentication and omitting preview Member/Shift/Terminal rails. It does not synthesize branch, terminal, sales-point or shift objects.
 
 ## Verification
 

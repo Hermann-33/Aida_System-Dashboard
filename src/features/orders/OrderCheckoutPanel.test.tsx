@@ -28,12 +28,13 @@ const cart: CartLine[] = [{
 
 const policy = {
   serverNow: '2026-08-14T00:00:00.000Z', timezone: 'Asia/Kuala_Lumpur', scheduleEnabled: true,
-  minimumLeadMinutes: 15, slotIntervalMinutes: 15, maximumAdvanceDays: 7,
+  minimumLeadMinutes: 15, preparationLeadMinutes: 15, slotIntervalMinutes: 15, maximumAdvanceDays: 7,
 };
 
 const order = {
   id: 'order-1', orderNumber: 100015, source: 'pos', customerUserId: null, memberId: null,
-  fulfillmentType: 'asap', requestedPickupAt: null, status: 'confirmed', statusVersion: 1,
+  fulfillmentType: 'asap', requestedPickupAt: null, prepareAt: null,
+  serverNow: '2026-08-14T00:00:00Z', scheduleState: null, status: 'confirmed', statusVersion: 1,
   currency: 'MYR', pricingVersion: 1, subtotalSen: 1450, totalSen: 1450,
   createdAt: '2026-08-14T00:00:00Z', updatedAt: '2026-08-14T00:00:00Z',
   statusUpdatedAt: '2026-08-14T00:00:00Z', preparingAt: null, readyAt: null,

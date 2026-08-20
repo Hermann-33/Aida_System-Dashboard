@@ -88,15 +88,13 @@ Do not fabricate hardcoded live terminal/branch/shift truth in React.
 
 Until a separate trusted terminal/branch/shift task exists, the accepted single-café/global-staff order scope should allow authenticated staff to use live Sale + Orders without those deferred domains blocking entry. Preview terminal/shift simulation may remain preview-only.
 
-## Required Dashboard implementation
+## Dashboard implementation — complete on task branch (2026-08-21)
 
 Matching branch:
 
 `codex/task-scheduled-ops-001-prep-queue`
 
-Dashboard source changes are intentionally delegated to Codex per user instruction.
-
-Required outcomes:
+Implemented outcomes:
 
 - consume `preparationLeadMinutes`, `prepareAt`, `serverNow`, `scheduleState`;
 - Orders rail becomes `Active | Scheduled | Ready | History` (or semantically equivalent);
@@ -107,6 +105,10 @@ Required outcomes:
 - staff live login via `/employee` reaches `/pos` without nonexistent terminal/shift prerequisites;
 - Admin login remains Admin/Owner-only;
 - preview fixtures never become live authority.
+
+`orderClient.ts` now rejects malformed/missing `preparationLeadMinutes`, `prepareAt`, `serverNow`, or `scheduleState` rather than manufacturing plausible defaults. `OrderBoard.tsx` classifies the polled server snapshots into Active, Scheduled, Ready and History. The UI never derives operational classification from the workstation clock and never auto-mutates a scheduled order.
+
+Live `/employee` authentication is independent of terminal enrolment. Live `/pos` enters the accepted global single-café Sale/Orders workspace without calling terminal/current-shift APIs; terminal, shift and preview member rails remain preview-only. Staff permission remains POS-only and `/admin/login` remains Admin/Owner-only.
 
 Visual work must reuse the existing AIDA Dashboard/POS design system from `src/styles/tokens.css`, existing Tailwind/shadcn components, Playfair Display + Plus Jakarta Sans, current rails/cards/tables/status-pill patterns and accessibility behavior. No second palette/design language.
 
@@ -121,4 +123,4 @@ npm test
 npm run build
 ```
 
-plus relevant browser/E2E verification, focused scheduled-order/staff-login regressions, final diff review, and mirrored documentation reconciliation.
+plus relevant browser/E2E verification, focused scheduled-order/staff-login regressions, final diff review, and mirrored documentation reconciliation. Source and automated gates passed on 2026-08-21; final commit inspection remains the branch closeout step.

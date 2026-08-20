@@ -68,22 +68,11 @@ Security advisor: unchanged one WARN only — `auth_leaked_password_protection` 
 
 Performance advisor: INFO-only unused-index notices; the new scheduled preparation index is unused on the tiny current dataset, which is expected.
 
-## Dashboard implementation still required
+## Dashboard implementation — complete on task branch
 
-Do not edit the shared backend contract again unless the current live fields prove insufficient.
+The Dashboard now parses the trusted preparation fields, presents Active/Scheduled/Ready/History workloads, promotes overdue and due scheduled work without changing persisted status, and keeps **Start preparing** on the existing versioned mutation. Conflict responses invalidate both queue and selected detail before staff may retry.
 
-Codex must implement on the existing Dashboard task branch:
-
-1. Parse/use `preparationLeadMinutes`, `prepareAt`, `serverNow`, `scheduleState`.
-2. Replace the flat Orders workload with `Active | Scheduled | Ready | History` or an equivalent semantic structure.
-3. Keep `future` scheduled orders out of Active.
-4. Put `due` and `overdue` scheduled orders in Active while persisted status remains `scheduled`.
-5. Promote overdue work before ordinary active orders.
-6. Keep **Start preparing** as the explicit existing versioned `scheduled -> preparing` transition.
-7. Repair live staff entry so authenticated `staff` reaches `/pos` without nonexistent live terminal/shift authority blocking Sale/Orders.
-8. Keep `/admin/login` Admin/Owner-only.
-9. Preserve preview-only terminal/shift simulation without promoting it to live truth.
-10. Preserve the existing AIDA Dashboard/POS visual system and accessibility patterns.
+Live staff authentication now reaches `/pos` without terminal enrolment/current-terminal/current-shift requests. Live Sale/Orders operates in the accepted global single-café scope. Terminal, shift and preview-member rails remain isolated to preview mode; staff is still denied Admin and Admin/Owner behavior is unchanged.
 
 ## Visual constraints
 
@@ -109,7 +98,7 @@ npm test
 npm run build
 ```
 
-Run relevant browser/E2E verification and add focused regressions for scheduled queue classification and staff login/route behavior.
+Automated closeout evidence on 2026-08-21: lint passed with the two existing shadcn Fast Refresh warnings; typecheck passed; Vitest passed 27 files / 120 tests; production build passed (with the existing large-chunk advisory); Playwright passed 10/10 across preview and non-preview staff suites; `git diff --check` passed.
 
 Then inspect and synchronize the canonical mirrored docs listed in `docs/context/SCHEDULED_ORDER_OPERATIONS_2026-08-20.md`.
 

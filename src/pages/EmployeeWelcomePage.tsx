@@ -7,7 +7,6 @@ import {
   refreshEmployeeSessionFromServer,
 } from '../auth/employeeSession';
 import { resolvePostLoginPath } from '../auth/permissions';
-import { fetchTerminalStatus } from '../auth/terminalCredential';
 import type { TerminalLocation } from '../auth/types';
 import {
   PREVIEW_DEMO_NOTICE,
@@ -70,34 +69,14 @@ export function EmployeeWelcomePage() {
   const badgeRef = useRef<HTMLInputElement>(null);
 
   const resolveTerminal = useCallback(async () => {
-    if (preview) {
-      const status = await previewTerminalRepository.getStatus();
-      if (!status.enrolled) {
-        setNeedsEnrol(true);
-        setLocation(null);
-        return;
-      }
-      setLocation(status.location);
-      setNeedsEnrol(false);
-      return;
-    }
-
-    const status = await fetchTerminalStatus();
+    if (!preview) return;
+    const status = await previewTerminalRepository.getStatus();
     if (!status.enrolled) {
       setNeedsEnrol(true);
       setLocation(null);
       return;
     }
-    setLocation({
-      terminalId: status.location.terminalId,
-      terminalCode: status.location.terminalCode,
-      branchId: status.location.branchId,
-      branchCode: status.location.branchCode,
-      branchName: status.location.branchName,
-      salesPointId: status.location.salesPointId,
-      salesPointCode: status.location.salesPointCode,
-      salesPointName: status.location.salesPointName,
-    });
+    setLocation(status.location);
     setNeedsEnrol(false);
   }, [preview]);
 
@@ -108,9 +87,9 @@ export function EmployeeWelcomePage() {
         navigate(resolvePostLoginPath(session.identity), { replace: true });
         return;
       }
-      await resolveTerminal();
+      if (preview) await resolveTerminal();
     })();
-  }, [navigate, resolveTerminal]);
+  }, [navigate, preview, resolveTerminal]);
 
   useEffect(() => {
     if (!preview || !needsEnrol) return;
@@ -125,49 +104,18 @@ export function EmployeeWelcomePage() {
     setError('');
     setBusy(true);
     try {
-      if (preview) {
-        if (sampleExpiresInSec <= 0 && enrolCode.trim().toUpperCase() === PREVIEW_SAMPLE_ENROLMENT_CODE) {
-          setError('This enrolment code has expired. Ask a manager to issue a new code.');
-          return;
-        }
-        const result = await previewTerminalRepository.enrol(enrolCode);
-        if (!result.ok) {
-          setError(result.message);
-          return;
-        }
-        setEnrolCode('');
-        setLocation(result.location);
-        setNeedsEnrol(false);
+      if (!preview) return;
+      if (sampleExpiresInSec <= 0 && enrolCode.trim().toUpperCase() === PREVIEW_SAMPLE_ENROLMENT_CODE) {
+        setError('This enrolment code has expired. Ask a manager to issue a new code.');
         return;
       }
-
-      const res = await fetch('/api/v1/terminals/enrol', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ enrolmentCode: enrolCode.trim() }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(body.error || 'Enrolment failed');
-        return;
-      }
-      if (body?.data?.terminalCredential) {
-        setError('Unexpected credential exposure');
+      const result = await previewTerminalRepository.enrol(enrolCode);
+      if (!result.ok) {
+        setError(result.message);
         return;
       }
       setEnrolCode('');
-      const loc = body.data.location;
-      setLocation({
-        terminalId: loc.terminalId,
-        terminalCode: loc.terminalCode,
-        branchId: loc.branchId,
-        branchCode: loc.branchCode,
-        branchName: loc.branchName,
-        salesPointId: loc.salesPointId,
-        salesPointCode: loc.salesPointCode,
-        salesPointName: loc.salesPointName,
-      });
+      setLocation(result.location);
       setNeedsEnrol(false);
     } catch {
       setError('Enrolment failed');

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useSyncExternalStore } from 'react';
 import {
-  employeeFetch,
   getEmployeeSession,
   logoutEmployee,
   subscribeEmployeeSession,
@@ -65,34 +64,9 @@ export function PosShellPage() {
       }
       return;
     }
-
-    const termRes = await employeeFetch('/api/v1/terminals/current');
-    if (!termRes.ok) {
-      setError('Terminal not registered or credential missing');
-      setPhase('need-location');
-      return;
-    }
-    const termBody = await termRes.json();
-    const loc = termBody.data.location as TerminalLocation;
-    const assigned = session.identity?.assignedBranchIds || [];
-    if (assigned.length && !assigned.includes(loc.branchId) && session.identity?.role === 'staff') {
-      setError('Unauthorised location for this employee');
-      setLocation(null);
-      setPhase('need-location');
-      return;
-    }
-    setLocation(loc);
-
-    const shiftRes = await employeeFetch('/api/v1/shifts/current');
-    const shiftBody = await shiftRes.json().catch(() => ({}));
-    if (shiftRes.ok && shiftBody.data?.shift) {
-      const s = shiftBody.data.shift as ShiftSummary;
-      setShift(s);
-      setPhase(s.status === 'closed' ? 'closed' : 'ready');
-    } else {
-      setShift(null);
-      setPhase('need-shift');
-    }
+    setLocation(null);
+    setShift(null);
+    setPhase('ready');
   }, [session.identity?.assignedBranchIds, session.identity?.role]);
 
   useEffect(() => {
@@ -104,33 +78,12 @@ export function PosShellPage() {
     setBusy(true);
     setError('');
     try {
-      if (isUiPreviewMode()) {
-        if (!location || !session.identity) {
-          setError('Preview terminal or employee missing');
-          return;
-        }
-        const s = previewShiftRepository.open(
-          location,
-          session.identity.id,
-          Number(openingFloat) || 0,
-        );
-        setShift(s);
-        setPhase('ready');
+      if (!location || !session.identity) {
+        setError('Preview terminal or employee missing');
         return;
       }
-
-      const res = await employeeFetch('/api/v1/shifts/open', {
-        method: 'POST',
-        body: JSON.stringify({ openingFloat: Number(openingFloat) || 0 }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(body.code === 'SHIFT_ALREADY_ACTIVE'
-          ? 'An active shift already exists for this terminal or employee'
-          : (body.error || 'Could not open shift'));
-        return;
-      }
-      setShift(body.data.shift);
+      const s = previewShiftRepository.open(location, session.identity.id, Number(openingFloat) || 0);
+      setShift(s);
       setPhase('ready');
     } finally {
       setBusy(false);
@@ -141,16 +94,7 @@ export function PosShellPage() {
     if (!shift) return;
     setBusy(true);
     try {
-      if (isUiPreviewMode()) {
-        setShift(previewShiftRepository.lock());
-        return;
-      }
-      const res = await employeeFetch(`/api/v1/shifts/${shift.id}/lock`, {
-        method: 'POST',
-        body: '{}',
-      });
-      const body = await res.json();
-      if (res.ok) setShift(body.data.shift);
+      setShift(previewShiftRepository.lock());
     } finally {
       setBusy(false);
     }
@@ -160,16 +104,7 @@ export function PosShellPage() {
     if (!shift) return;
     setBusy(true);
     try {
-      if (isUiPreviewMode()) {
-        setShift(previewShiftRepository.resume());
-        return;
-      }
-      const res = await employeeFetch(`/api/v1/shifts/${shift.id}/resume`, {
-        method: 'POST',
-        body: '{}',
-      });
-      const body = await res.json();
-      if (res.ok) setShift(body.data.shift);
+      setShift(previewShiftRepository.resume());
     } finally {
       setBusy(false);
     }
@@ -185,33 +120,8 @@ export function PosShellPage() {
     setBusy(true);
     setError('');
     try {
-      if (isUiPreviewMode()) {
-        const closed = previewShiftRepository.close(
-          Number(expectedCash),
-          Number(actualCash),
-          notes || undefined,
-          handoverNotes || undefined,
-        );
-        setShift(closed);
-        setPhase('closed');
-        setConfirmClose(false);
-        return;
-      }
-      const res = await employeeFetch(`/api/v1/shifts/${shift.id}/close`, {
-        method: 'POST',
-        body: JSON.stringify({
-          expectedCash: Number(expectedCash),
-          actualCash: Number(actualCash),
-          notes: notes || null,
-          handoverNotes: handoverNotes || null,
-        }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(body.error || 'Close failed');
-        return;
-      }
-      setShift(body.data.shift);
+      const closed = previewShiftRepository.close(Number(expectedCash), Number(actualCash), notes || undefined, handoverNotes || undefined);
+      setShift(closed);
       setPhase('closed');
       setConfirmClose(false);
     } finally {
@@ -220,15 +130,19 @@ export function PosShellPage() {
   }
 
   const identity = session.identity;
+  const preview = isUiPreviewMode();
+  const workspaceReady = identity && phase === 'ready'
+    && (!preview || Boolean(location && shift?.status === 'open'));
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <PosContextBar employee={identity} location={location} shift={shift} connection={connectionState} />
-      {identity && location && shift && phase === 'ready' && shift.status === 'open' ? (
+      <PosContextBar employee={identity} location={location} shift={shift} connection={connectionState} operationalMode={preview ? 'preview' : 'live'} />
+      {workspaceReady ? (
         <CounterWorkspace
           employee={identity}
-          location={location}
-          shift={shift}
+          {...(location ? { location } : {})}
+          {...(shift ? { shift } : {})}
+          previewOperationalContext={preview}
           onLock={() => void lockShift()}
           onCloseRequest={() => setPhase('closing')}
           onLogout={() => void logoutEmployee().then(() => { window.location.href = '/employee'; })}

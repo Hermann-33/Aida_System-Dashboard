@@ -1,5 +1,9 @@
 # Audit Log
 
+## 2026-08-21 — TASK-SCHEDULED-OPS-001 Dashboard operations integration
+
+The Dashboard adopted the live preparation-window contract (`preparationLeadMinutes`, `prepareAt`, `serverNow`, `scheduleState`) with invalid-response rejection, replaced the flat Orders table with Active/Scheduled/Ready/History workload views, promoted overdue/due scheduled work while preserving persisted `scheduled`, and retained explicit versioned Start preparing/conflict refetch. Live employee entry no longer calls nonexistent terminal/shift APIs before Sale/Orders; trusted staff uses the accepted single-café/global queue and preview terminal/shift/member simulations remain preview-only. Focused unit/component and Playwright regressions cover contract parsing, classification/sort, status mutation, staff routing, Admin denial, responsive workload navigation and console cleanliness. No Supabase or customer-repository state changed.
+
 This is the mirrored project-level chronology. Historical task verdicts describe the state at that task's completion; later entries supersede earlier open blockers without rewriting history.
 
 ## 2026-08-20 — TASK-UI-REDESIGN-003 post-merge redesign audit and release verification

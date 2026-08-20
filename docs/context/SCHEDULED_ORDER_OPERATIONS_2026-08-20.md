@@ -296,3 +296,9 @@ When Dashboard integration is complete, update and mirror the affected canonical
 - `docs/security/SECURITY_REVIEW.md`
 
 Do not mark `TASK-SCHEDULED-OPS-001` COMPLETE until the Dashboard implementation, tests, and mirrored documentation pass.
+
+## Dashboard implementation evidence — 2026-08-21
+
+The task branch now implements the defined Dashboard scope. Trusted schedule fields are strictly parsed; the order workspace is split into Active/Scheduled/Ready/History; due/overdue scheduled work stays persisted `scheduled` until an explicit versioned Start preparing action; and live staff enters Sale/Orders without terminal/shift prerequisites or fabricated authority. Preview terminal/shift behavior remains preview-only and staff remains denied Admin.
+
+Focused Vitest and Playwright regressions cover parsing, workload classification/sort, conflict behavior, live staff routing, preview isolation, responsive workload navigation and console errors. No Supabase migration/state or customer-repository source changed in the Dashboard implementation.

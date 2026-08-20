@@ -62,14 +62,15 @@ type RailId = 'sale' | 'orders' | 'member' | 'shift' | 'terminal' | 'help';
 
 interface Props {
   employee: EmployeeIdentity;
-  location: TerminalLocation;
-  shift: ShiftSummary;
-  onLock: () => void;
-  onCloseRequest: () => void;
+  location?: TerminalLocation;
+  shift?: ShiftSummary;
+  previewOperationalContext?: boolean;
+  onLock?: () => void;
+  onCloseRequest?: () => void;
   onLogout: () => void;
   busy?: boolean;
-  connectionState: ConnectionState;
-  onConnectionStateChange: (state: ConnectionState) => void;
+  connectionState?: ConnectionState;
+  onConnectionStateChange?: (state: ConnectionState) => void;
 }
 
 const RAIL_ITEMS: { id: RailId; label: string; icon: typeof ShoppingBag }[] = [
@@ -92,12 +93,13 @@ const POS_CATALOGUE_QUERY = ['pos-catalogue'] as const;
 export function CounterWorkspace({
   location,
   shift,
-  onLock,
-  onCloseRequest,
+  previewOperationalContext = false,
+  onLock = () => undefined,
+  onCloseRequest = () => undefined,
   onLogout,
   busy = false,
-  connectionState,
-  onConnectionStateChange,
+  connectionState = 'online',
+  onConnectionStateChange = () => undefined,
 }: Props) {
   const catalogue = useQuery({
     queryKey: POS_CATALOGUE_QUERY,
@@ -160,8 +162,12 @@ export function CounterWorkspace({
     return items;
   }, [categoryId, menuItems, search]);
 
-  const terminalFixture = PREVIEW_TERMINALS.find((t) => t.code === location.terminalCode)
-    ?? PREVIEW_TERMINALS[0];
+  const railItems = previewOperationalContext
+    ? RAIL_ITEMS
+    : RAIL_ITEMS.filter((item) => item.id === 'sale' || item.id === 'orders' || item.id === 'help');
+  const terminalFixture = location
+    ? PREVIEW_TERMINALS.find((t) => t.code === location.terminalCode) ?? PREVIEW_TERMINALS[0]
+    : null;
 
   function addToCart(item: CatalogueItem) {
     if (!item.isAvailable || completedOrder) return;
@@ -321,7 +327,7 @@ export function CounterWorkspace({
       >
         <p className="mb-3 font-brand text-2xl text-[var(--aida-floral-pink)]">Aida</p>
         <ul className="flex w-full flex-col items-center gap-1 px-2">
-          {RAIL_ITEMS.map((item) => {
+          {railItems.map((item) => {
             const Icon = item.icon;
             const active = rail === item.id;
             return (
@@ -562,7 +568,7 @@ export function CounterWorkspace({
 
         {rail === 'orders' && <OrderBoard />}
 
-        {rail === 'member' && (
+        {previewOperationalContext && rail === 'member' && (
           <MemberPanel
             member={member}
             selectedRewardId={selectedReward?.id ?? null}
@@ -571,7 +577,7 @@ export function CounterWorkspace({
           />
         )}
 
-        {rail === 'shift' && (
+        {previewOperationalContext && shift && rail === 'shift' && (
           <section aria-labelledby="shift-panel-title" className="max-w-2xl">
             <h2 id="shift-panel-title" className="font-display text-xl text-primary">
               Shift controls
@@ -682,7 +688,7 @@ export function CounterWorkspace({
           </section>
         )}
 
-        {rail === 'terminal' && (
+        {previewOperationalContext && location && rail === 'terminal' && (
           <section aria-labelledby="terminal-info-title" className="max-w-xl">
             <h2 id="terminal-info-title" className="font-display text-xl text-primary">
               Terminal
@@ -743,13 +749,21 @@ export function CounterWorkspace({
             <h2 id="help-title" className="font-display text-xl text-primary">
               Help &amp; recovery
             </h2>
-            <ul className="mt-4 flex flex-col gap-3 text-sm text-foreground">
-              <li>If connection shows <strong className="font-semibold">Offline</strong>, continue cash sales and sync when back online (Team 2).</li>
-              <li>If payment shows <strong className="font-semibold">Unknown</strong>, use Check status on the terminal before retrying charge.</li>
-              <li>If printer fails, reprint from Orders after sale completes (permission required).</li>
-              <li>Lock shift before leaving the counter; manager closes with counted cash.</li>
-              <li>Contact branch manager for enrolment codes and variance approval.</li>
-            </ul>
+            {previewOperationalContext ? (
+              <ul className="mt-4 flex flex-col gap-3 text-sm text-foreground">
+                <li>If connection shows <strong className="font-semibold">Offline</strong>, continue cash sales and sync when back online (Team 2).</li>
+                <li>If payment shows <strong className="font-semibold">Unknown</strong>, use Check status on the terminal before retrying charge.</li>
+                <li>If printer fails, reprint from Orders after sale completes (permission required).</li>
+                <li>Lock shift before leaving the counter; manager closes with counted cash.</li>
+                <li>Contact branch manager for enrolment codes and variance approval.</li>
+              </ul>
+            ) : (
+              <div className="mt-4 rounded-lg border border-border bg-card p-4 text-sm text-foreground">
+                <p className="font-semibold">Live single-café operations</p>
+                <p className="mt-1 text-muted-foreground">Sale and Orders use trusted shared catalogue and order services. Terminal, shift and branch operations are deferred and are not required for this workspace.</p>
+                <Button type="button" variant="outline" className="mt-4" onClick={onLogout}>Log out</Button>
+              </div>
+            )}
           </section>
         )}
 
