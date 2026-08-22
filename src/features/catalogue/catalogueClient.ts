@@ -10,6 +10,24 @@ export type CatalogueVariant = {
   sortOrder: number;
 };
 
+export type CatalogueCustomizationOption = {
+  id: string;
+  code: string;
+  label: string;
+  priceDeltaSen: number;
+  isDefault: boolean;
+  isAvailable: boolean;
+  sortOrder: number;
+};
+
+export type CatalogueCustomizationGroup = {
+  id: string;
+  code: string;
+  name: string;
+  sortOrder: number;
+  options: CatalogueCustomizationOption[];
+};
+
 export type CatalogueCategory = {
   id: string;
   slug: string;
@@ -35,12 +53,14 @@ export type CatalogueItem = {
   isFeatured: boolean;
   isBestSeller: boolean;
   isStudentEligible: boolean;
+  isDrink: boolean;
   imageUrl: string | null;
   volumeMl: number | null;
   prepRoute: 'bar' | 'kitchen';
   sortOrder: number;
   variants: CatalogueVariant[];
   compatibleAddOnIds: string[];
+  customizationGroups: CatalogueCustomizationGroup[];
 };
 
 export type CatalogueSnapshot = {
@@ -57,6 +77,15 @@ export type SaveCategoryPayload = {
   isActive: boolean;
 };
 
+export type SaveCustomizationOptionPayload = {
+  optionValueId: string;
+  label: string;
+  priceDeltaSen: number;
+  isAvailable: boolean;
+  isDefault: boolean;
+  sortOrder: number;
+};
+
 export type SaveItemPayload = {
   id?: string;
   categoryId: string;
@@ -70,6 +99,7 @@ export type SaveItemPayload = {
   isFeatured: boolean;
   isBestSeller: boolean;
   isStudentEligible: boolean;
+  isDrink: boolean;
   imageUrl?: string | null;
   volumeMl?: number | null;
   prepRoute: 'bar' | 'kitchen';
@@ -83,6 +113,7 @@ export type SaveItemPayload = {
     sortOrder: number;
   }>;
   compatibleAddOnIds: string[];
+  customizationOptions?: SaveCustomizationOptionPayload[];
 };
 
 async function parseSnapshot(response: Response): Promise<CatalogueSnapshot> {
@@ -99,7 +130,13 @@ async function parseSnapshot(response: Response): Promise<CatalogueSnapshot> {
   return {
     revision: Number(raw.revision ?? 0),
     categories: raw.categories,
-    items: raw.items,
+    items: raw.items.map((item) => ({
+      ...item,
+      isDrink: item.isDrink === true,
+      customizationGroups: Array.isArray(item.customizationGroups)
+        ? item.customizationGroups
+        : [],
+    })),
   };
 }
 
