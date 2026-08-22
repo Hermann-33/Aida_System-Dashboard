@@ -133,11 +133,58 @@ async function parseSnapshot(response: Response): Promise<CatalogueSnapshot> {
     items: raw.items.map((item) => ({
       ...item,
       isDrink: item.isDrink === true,
-      customizationGroups: Array.isArray(item.customizationGroups)
-        ? item.customizationGroups
-        : [],
+      customizationGroups: parseCustomizationGroups(item.customizationGroups),
     })),
   };
+}
+
+function parseCustomizationGroups(value: unknown): CatalogueCustomizationGroup[] {
+  // Older catalogue responses predate drink customization groups. An omitted
+  // field means no groups; a present malformed field must fail visibly.
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error('Catalogue customization groups are invalid.');
+
+  return value.map((group) => {
+    if (!isRecord(group)
+      || typeof group.id !== 'string'
+      || typeof group.code !== 'string'
+      || typeof group.name !== 'string'
+      || typeof group.sortOrder !== 'number'
+      || !Array.isArray(group.options)) {
+      throw new Error('Catalogue customization group is invalid.');
+    }
+    return {
+      id: group.id,
+      code: group.code,
+      name: group.name,
+      sortOrder: group.sortOrder,
+      options: group.options.map((option) => {
+        if (!isRecord(option)
+          || typeof option.id !== 'string'
+          || typeof option.code !== 'string'
+          || typeof option.label !== 'string'
+          || typeof option.priceDeltaSen !== 'number'
+          || typeof option.isDefault !== 'boolean'
+          || typeof option.isAvailable !== 'boolean'
+          || typeof option.sortOrder !== 'number') {
+          throw new Error('Catalogue customization option is invalid.');
+        }
+        return {
+          id: option.id,
+          code: option.code,
+          label: option.label,
+          priceDeltaSen: option.priceDeltaSen,
+          isDefault: option.isDefault,
+          isAvailable: option.isAvailable,
+          sortOrder: option.sortOrder,
+        };
+      }),
+    };
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export async function fetchPublishedCatalogue(

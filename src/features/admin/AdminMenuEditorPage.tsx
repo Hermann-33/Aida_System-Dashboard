@@ -132,7 +132,8 @@ function LoadedMenuEditor({ item, catalogue, readOnly }: { item: CatalogueItem; 
   function removeVariant(index: number) {
     setVariants((current) => {
       const next = current.filter((_, i) => i !== index);
-      if (next.length > 0 && !next.some((variant) => variant.isDefault)) next[0] = { ...next[0], isDefault: true };
+      const first = next[0];
+      if (first && !next.some((variant) => variant.isDefault)) next[0] = { ...first, isDefault: true };
       return next;
     });
   }
@@ -177,9 +178,13 @@ function LoadedMenuEditor({ item, catalogue, readOnly }: { item: CatalogueItem; 
       setError('Name, category and a valid non-negative price are required.');
       return;
     }
-    if (variants.length > 0 && variants.filter((variant) => variant.isDefault).length !== 1) {
-      setError('Items with variants require exactly one default variant.');
-      return;
+    if (variants.length > 0) {
+      const availableVariants = variants.filter((variant) => variant.isAvailable);
+      const availableDefaults = availableVariants.filter((variant) => variant.isDefault);
+      if (availableVariants.length === 0 || availableDefaults.length !== 1) {
+        setError('Items with variants require at least one available variant and exactly one available default.');
+        return;
+      }
     }
 
     if (isDrink && customizationOptions.length > 0) {
@@ -240,7 +245,7 @@ function LoadedMenuEditor({ item, catalogue, readOnly }: { item: CatalogueItem; 
       actions={<Link to="/admin/catalogue/menu" className="btn-secondary">Back to list</Link>}
     >
       {readOnly && <div className="empty-state" role="status"><p>UI Preview can inspect the live published catalogue only. A real AIDA Admin session is required to edit menu data.</p></div>}
-      <form className="admin-form" onSubmit={onSubmit}>
+      <form className="admin-form admin-form--menu-editor" onSubmit={onSubmit}>
         <fieldset disabled={readOnly} className="contents">
           <label>Display name<input value={name} onChange={(event) => setName(event.target.value)} required /></label>
           <label>SKU<input value={sku} onChange={(event) => setSku(event.target.value.toUpperCase())} required /></label>
@@ -317,7 +322,7 @@ function LoadedMenuEditor({ item, catalogue, readOnly }: { item: CatalogueItem; 
                       <label>Customer label<input value={option.label} onChange={(event) => updateCustomization(option.optionValueId, { label: event.target.value })} required /></label>
                       <label>Price delta (sen)<input type="number" value={option.priceDeltaSen} onChange={(event) => updateCustomization(option.optionValueId, { priceDeltaSen: Number(event.target.value) })} /></label>
                       <label className="admin-checkbox"><input type="checkbox" checked={option.isAvailable} onChange={(event) => updateCustomization(option.optionValueId, { isAvailable: event.target.checked })} />Available</label>
-                      <label className="admin-checkbox"><input type="radio" name={`default-${group.id}`} checked={option.isDefault} onChange={() => updateCustomization(option.optionValueId, { isDefault: true })} />Default</label>
+                      <label className="admin-checkbox"><input type="radio" name={`default-${group.id}`} checked={option.isDefault} disabled={!option.isAvailable} onChange={() => updateCustomization(option.optionValueId, { isDefault: true })} />Default</label>
                     </div>
                   ))}
                 </div>

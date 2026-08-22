@@ -30,7 +30,7 @@ function fixture(status: OrderSnapshot['status'] = 'confirmed'): OrderSnapshot {
     statusUpdatedAt: '2026-08-14T00:00:00Z', preparingAt: null, readyAt: null, completedAt: null, cancelledAt: null,
     lines: [{
       id: 'line-1', lineNumber: 1, itemId: 'item-1', sku: 'CF-LAT', name: 'Latte', prepRoute: 'bar',
-      basePriceSen: 1300, variant: null, addOns: [], addOnTotalSen: 0, unitPriceSen: 1450,
+      basePriceSen: 1300, variant: null, addOns: [], addOnTotalSen: 0, options: [], optionTotalSen: 0, unitPriceSen: 1450,
       quantity: 1, lineTotalSen: 1450, note: null,
     }],
   };

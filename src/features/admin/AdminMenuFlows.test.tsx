@@ -109,6 +109,17 @@ describe('Admin shared catalogue flows', () => {
     expect(screen.queryByRole('button', { name: /add category/i })).not.toBeInTheDocument();
   });
 
+  it('keeps the item editor read-only in preview mode', async () => {
+    runtimeMode.preview = true;
+    renderRoute('/admin/catalogue/menu/latte');
+
+    expect(await screen.findByText(/real AIDA Admin session is required/i)).toBeInTheDocument();
+    expect(fetchPublishedCatalogue).toHaveBeenCalledTimes(1);
+    expect(fetchAdminCatalogue).not.toHaveBeenCalled();
+    expect(screen.getByRole('group')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /save catalogue item/i })).not.toBeInTheDocument();
+  });
+
   it('keeps the privileged Admin catalogue endpoint in live mode', async () => {
     renderRoute('/admin/catalogue/menu');
 
@@ -185,6 +196,16 @@ describe('Admin shared catalogue flows', () => {
     await user.clear(customerLabels[1]!);
     await user.type(customerLabels[1]!, 'Cold');
 
+    const temperatureCard = screen.getByRole('heading', { name: 'Temperature' }).closest('.modifier-group-card') as HTMLElement;
+    const temperatureAvailability = within(temperatureCard).getAllByLabelText('Available');
+    const temperatureDefaults = within(temperatureCard).getAllByLabelText('Default');
+    const temperatureDeltas = within(temperatureCard).getAllByLabelText('Price delta (sen)');
+    await user.click(temperatureAvailability[0]!);
+    expect(temperatureDefaults[0]).toBeDisabled();
+    expect(temperatureDefaults[1]).toBeChecked();
+    await user.clear(temperatureDeltas[1]!);
+    await user.type(temperatureDeltas[1]!, '75');
+
     await user.click(screen.getByLabelText(/oat milk/i));
     await user.click(screen.getByRole('button', { name: /save catalogue item/i }));
 
@@ -201,10 +222,24 @@ describe('Admin shared catalogue flows', () => {
         expect.objectContaining({ label: 'Large', isDefault: false }),
       ]),
       customizationOptions: expect.arrayContaining([
-        expect.objectContaining({ optionValueId: 'hot', label: 'Hot', isDefault: true }),
-        expect.objectContaining({ optionValueId: 'iced', label: 'Cold', isAvailable: true }),
+        expect.objectContaining({ optionValueId: 'hot', label: 'Hot', isAvailable: false, isDefault: false }),
+        expect.objectContaining({ optionValueId: 'iced', label: 'Cold', priceDeltaSen: 75, isAvailable: true, isDefault: true }),
         expect.objectContaining({ optionValueId: 'regular', label: 'Regular', isDefault: true }),
       ]),
     }), expect.anything()));
+  });
+
+  it('rejects saving a drink group with no available default', async () => {
+    const user = userEvent.setup();
+    renderRoute('/admin/catalogue/menu/latte');
+
+    const temperatureCard = (await screen.findByRole('heading', { name: 'Temperature' })).closest('.modifier-group-card') as HTMLElement;
+    const availability = within(temperatureCard).getAllByLabelText('Available');
+    await user.click(availability[0]!);
+    await user.click(availability[1]!);
+    await user.click(screen.getByRole('button', { name: /save catalogue item/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/at least one available option/i);
+    expect(saveCatalogueItem).not.toHaveBeenCalled();
   });
 });

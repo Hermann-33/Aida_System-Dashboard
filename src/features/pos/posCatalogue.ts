@@ -43,7 +43,7 @@ export function posModifierGroups(
     });
   }
 
-  for (const group of item.customizationGroups) {
+  for (const group of item.customizationGroups ?? []) {
     groups.push({
       id: `option:${group.id}`,
       name: group.name,
