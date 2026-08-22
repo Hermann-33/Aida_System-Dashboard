@@ -18,6 +18,7 @@ export type OrderSelectionLine = {
   itemId: string;
   variantId?: string;
   addOnIds: string[];
+  optionValueIds: string[];
   quantity: number;
   note?: string;
 };
@@ -49,6 +50,16 @@ export type OrderAddOnSnapshot = {
   priceSen: number;
 };
 
+export type OrderOptionSnapshot = {
+  groupId: string;
+  groupCode: string;
+  groupName: string;
+  optionValueId: string;
+  optionCode: string;
+  optionLabel: string;
+  priceDeltaSen: number;
+};
+
 export type OrderLineSnapshot = {
   id?: string;
   lineNumber: number;
@@ -65,6 +76,8 @@ export type OrderLineSnapshot = {
   } | null;
   addOns: OrderAddOnSnapshot[];
   addOnTotalSen: number;
+  options: OrderOptionSnapshot[];
+  optionTotalSen: number;
   unitPriceSen: number;
   quantity: number;
   lineTotalSen: number;
@@ -114,11 +127,7 @@ export class OrderClientError extends Error {
   readonly status: number;
   readonly code: string;
 
-  constructor(
-    message: string,
-    status: number,
-    code: string,
-  ) {
+  constructor(message: string, status: number, code: string) {
     super(message);
     this.name = 'OrderClientError';
     this.status = status;
@@ -196,10 +205,14 @@ export function cartToOrderItems(lines: CartLine[]): OrderSelectionLine[] {
   return lines.map((line) => {
     const variantId = line.modifiers.find((group) => group.groupId === 'variant')?.optionIds[0];
     const addOnIds = line.modifiers.find((group) => group.groupId === 'addons')?.optionIds ?? [];
+    const optionValueIds = line.modifiers
+      .filter((group) => group.groupId.startsWith('option:'))
+      .flatMap((group) => group.optionIds);
     return {
       itemId: line.menuItemId,
       ...(variantId ? { variantId } : {}),
       addOnIds: [...addOnIds],
+      optionValueIds: [...optionValueIds],
       quantity: line.qty,
       ...(line.note?.trim() ? { note: line.note.trim() } : {}),
     };
