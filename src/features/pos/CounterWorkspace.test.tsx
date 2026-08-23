@@ -26,17 +26,33 @@ const sharedCatalogue: CatalogueSnapshot = {
     {
       id: 'latte', categoryId: 'coffee', categoryName: 'Coffee', slug: 'latte', sku: 'LATTE', kind: 'product',
       name: 'Latte', description: '', basePriceSen: 1050, isAvailable: true, isPublished: true,
-      isFeatured: false, isBestSeller: true, isStudentEligible: false, imageUrl: null, volumeMl: 350,
+      isFeatured: false, isBestSeller: true, isStudentEligible: false, isDrink: true, imageUrl: null, volumeMl: 350,
       prepRoute: 'bar', sortOrder: 10, compatibleAddOnIds: ['oat'],
       variants: [
         { id: 'medium', code: 'medium', label: 'Medium', priceDeltaSen: 0, isDefault: true, isAvailable: true, sortOrder: 10 },
+      ],
+      customizationGroups: [
+        {
+          id: 'temperature', code: 'temperature', name: 'Temperature', sortOrder: 10,
+          options: [
+            { id: 'hot', code: 'hot', label: 'Hot', priceDeltaSen: 0, isDefault: true, isAvailable: true, sortOrder: 10 },
+            { id: 'iced', code: 'iced', label: 'Iced', priceDeltaSen: 0, isDefault: false, isAvailable: true, sortOrder: 20 },
+          ],
+        },
+        {
+          id: 'sweetness', code: 'sweetness', name: 'Sweetness', sortOrder: 20,
+          options: [
+            { id: 'regular', code: 'regular', label: 'Regular', priceDeltaSen: 0, isDefault: true, isAvailable: true, sortOrder: 10 },
+            { id: 'less-sweet', code: 'less-sweet', label: 'Less sweet', priceDeltaSen: 0, isDefault: false, isAvailable: true, sortOrder: 20 },
+          ],
+        },
       ],
     },
     {
       id: 'oat', categoryId: 'coffee', categoryName: 'Coffee', slug: 'oat', sku: 'OAT', kind: 'addon',
       name: 'Oat milk', description: '', basePriceSen: 150, isAvailable: true, isPublished: true,
-      isFeatured: false, isBestSeller: false, isStudentEligible: false, imageUrl: null, volumeMl: null,
-      prepRoute: 'bar', sortOrder: 20, compatibleAddOnIds: [], variants: [],
+      isFeatured: false, isBestSeller: false, isStudentEligible: false, isDrink: false, imageUrl: null, volumeMl: null,
+      prepRoute: 'bar', sortOrder: 20, compatibleAddOnIds: [], variants: [], customizationGroups: [],
     },
   ],
 };
@@ -122,6 +138,26 @@ describe('CounterWorkspace', () => {
     renderWorkspace();
     expect(await screen.findByRole('alert')).toHaveTextContent(/shared catalogue is unavailable/i);
     expect(screen.queryByRole('button', { name: /salted caramel latte/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps independently configured drink options and add-ons on separate cart lines', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await user.click(await screen.findByRole('button', { name: /latte/i }));
+    await user.click(screen.getByLabelText('Iced'));
+    await user.click(screen.getByLabelText('Less sweet'));
+    await user.click(screen.getByRole('checkbox', { name: /Oat milk/i }));
+    await user.click(screen.getByRole('button', { name: /add to order/i }));
+
+    await user.click(screen.getByRole('button', { name: /latte/i }));
+    expect(screen.getByLabelText('Hot')).toBeChecked();
+    expect(screen.getByLabelText('Regular')).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Oat milk/i })).not.toBeChecked();
+    await user.click(screen.getByRole('button', { name: /add to order/i }));
+
+    expect(screen.getByText('Variant: Medium · Temperature: Iced · Sweetness: Less sweet · Add-ons: Oat milk')).toBeInTheDocument();
+    expect(screen.getByText('Variant: Medium · Temperature: Hot · Sweetness: Regular')).toBeInTheDocument();
   });
 });
 

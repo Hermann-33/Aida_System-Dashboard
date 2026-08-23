@@ -21,15 +21,17 @@ const lines: CartLine[] = [{
   qty: 2,
   modifiers: [
     { groupId: 'variant', optionIds: ['22222222-2222-4222-8222-222222222222'] },
+    { groupId: 'option:temperature', optionIds: ['55555555-5555-4555-8555-555555555555'] },
+    { groupId: 'option:sweetness', optionIds: ['66666666-6666-4666-8666-666666666666'] },
     { groupId: 'addons', optionIds: ['33333333-3333-4333-8333-333333333333'] },
   ],
-  note: '  less ice  ',
+  note: '  less foam  ',
 }];
 
 describe('order client trust boundary', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('maps cart selections to IDs and intent without client commercial fields', () => {
+  it('maps per-line variant, drink options and add-ons to IDs without client commercial fields', () => {
     const payload = buildOrderIntent(lines, 'asap');
     expect(payload).toEqual({
       fulfillmentType: 'asap',
@@ -37,8 +39,12 @@ describe('order client trust boundary', () => {
         itemId: '11111111-1111-4111-8111-111111111111',
         variantId: '22222222-2222-4222-8222-222222222222',
         addOnIds: ['33333333-3333-4333-8333-333333333333'],
+        optionValueIds: [
+          '55555555-5555-4555-8555-555555555555',
+          '66666666-6666-4666-8666-666666666666',
+        ],
         quantity: 2,
-        note: 'less ice',
+        note: 'less foam',
       }],
     });
     const serialized = JSON.stringify(payload);

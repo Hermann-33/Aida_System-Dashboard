@@ -95,7 +95,7 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
               setRequestedPickupAt('');
             }}
           >
-            ASAP
+            Now
           </Button>
           <Button
             type="button"
@@ -183,7 +183,7 @@ export function AuthoritativeOrderReceipt({ order, onNewSale }: { order: OrderSn
       <p className="mt-2 text-sm text-muted-foreground">
         {order.fulfillmentType === 'scheduled' && order.requestedPickupAt
           ? `Scheduled for ${slotLabel(order.requestedPickupAt, 'Asia/Kuala_Lumpur')}`
-          : 'ASAP pickup'} · status {order.status}
+          : 'Now pickup'} · status {order.status}
       </p>
       <p className="mt-4 text-2xl font-bold text-foreground">{formatRmFromSen(order.totalSen)}</p>
       <p className="mt-1 text-sm font-semibold text-muted-foreground">Pay at counter · unpaid settlement state</p>

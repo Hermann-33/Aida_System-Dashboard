@@ -26,10 +26,10 @@ const sharedCatalogue: CatalogueSnapshot = {
   items: [{
     id: 'latte', categoryId: 'coffee', categoryName: 'Coffee', slug: 'latte', sku: 'LATTE', kind: 'product',
     name: 'Latte', description: '', basePriceSen: 1050, isAvailable: true, isPublished: true,
-    isFeatured: false, isBestSeller: false, isStudentEligible: false, imageUrl: null, volumeMl: null,
+    isFeatured: false, isBestSeller: false, isStudentEligible: false, isDrink: false, imageUrl: null, volumeMl: null,
     prepRoute: 'bar', sortOrder: 10, compatibleAddOnIds: [], variants: [
       { id: 'medium', code: 'medium', label: 'Medium', priceDeltaSen: 0, isDefault: true, isAvailable: true, sortOrder: 10 },
-    ],
+    ], customizationGroups: [],
   }],
 };
 

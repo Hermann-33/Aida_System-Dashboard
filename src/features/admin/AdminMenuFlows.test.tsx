@@ -39,17 +39,33 @@ const catalogue: CatalogueSnapshot = {
     {
       id: 'latte', categoryId: 'coffee', categoryName: 'Coffee', slug: 'latte', sku: 'LATTE', kind: 'product',
       name: 'Latte', description: 'Espresso and milk', basePriceSen: 1050, isAvailable: true, isPublished: true,
-      isFeatured: false, isBestSeller: true, isStudentEligible: false, imageUrl: null, volumeMl: 350,
+      isFeatured: false, isBestSeller: true, isStudentEligible: false, isDrink: true, imageUrl: null, volumeMl: 350,
       prepRoute: 'bar', sortOrder: 10, compatibleAddOnIds: ['oat'],
       variants: [
         { id: 'medium', code: 'medium', label: 'Medium', priceDeltaSen: 0, isDefault: true, isAvailable: true, sortOrder: 10 },
+      ],
+      customizationGroups: [
+        {
+          id: 'temperature', code: 'temperature', name: 'Temperature', sortOrder: 10,
+          options: [
+            { id: 'hot', code: 'hot', label: 'Hot', priceDeltaSen: 0, isDefault: true, isAvailable: true, sortOrder: 10 },
+            { id: 'iced', code: 'iced', label: 'Iced', priceDeltaSen: 0, isDefault: false, isAvailable: true, sortOrder: 20 },
+          ],
+        },
+        {
+          id: 'sweetness', code: 'sweetness', name: 'Sweetness', sortOrder: 20,
+          options: [
+            { id: 'regular', code: 'regular', label: 'Regular', priceDeltaSen: 0, isDefault: true, isAvailable: true, sortOrder: 10 },
+            { id: 'less', code: 'less-sweet', label: 'Less sweet', priceDeltaSen: 0, isDefault: false, isAvailable: true, sortOrder: 20 },
+          ],
+        },
       ],
     },
     {
       id: 'oat', categoryId: 'coffee', categoryName: 'Coffee', slug: 'oat', sku: 'OAT', kind: 'addon',
       name: 'Oat milk', description: '', basePriceSen: 150, isAvailable: true, isPublished: true,
-      isFeatured: false, isBestSeller: false, isStudentEligible: false, imageUrl: null, volumeMl: null,
-      prepRoute: 'bar', sortOrder: 20, compatibleAddOnIds: [], variants: [],
+      isFeatured: false, isBestSeller: false, isStudentEligible: false, isDrink: false, imageUrl: null, volumeMl: null,
+      prepRoute: 'bar', sortOrder: 20, compatibleAddOnIds: [], variants: [], customizationGroups: [],
     },
   ],
 };
@@ -93,6 +109,17 @@ describe('Admin shared catalogue flows', () => {
     expect(screen.queryByRole('button', { name: /add category/i })).not.toBeInTheDocument();
   });
 
+  it('keeps the item editor read-only in preview mode', async () => {
+    runtimeMode.preview = true;
+    renderRoute('/admin/catalogue/menu/latte');
+
+    expect(await screen.findByText(/real AIDA Admin session is required/i)).toBeInTheDocument();
+    expect(fetchPublishedCatalogue).toHaveBeenCalledTimes(1);
+    expect(fetchAdminCatalogue).not.toHaveBeenCalled();
+    expect(screen.getByRole('group')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /save catalogue item/i })).not.toBeInTheDocument();
+  });
+
   it('keeps the privileged Admin catalogue endpoint in live mode', async () => {
     renderRoute('/admin/catalogue/menu');
 
@@ -102,7 +129,32 @@ describe('Admin shared catalogue flows', () => {
     expect(screen.getByRole('button', { name: /add item/i })).toBeInTheDocument();
   });
 
-  it('creates a category and a temporary item through the shared catalogue client', async () => {
+  it('creates a drink item with standard customization initialization enabled', async () => {
+    const user = userEvent.setup();
+    renderRoute('/admin/catalogue/menu');
+    await screen.findByText('Latte');
+
+    await user.click(screen.getByRole('button', { name: /add item/i }));
+    const itemDialog = screen.getByRole('dialog', { name: 'Add menu item' });
+    await user.type(within(itemDialog).getByLabelText('Name'), 'Temporary Special');
+    const price = within(itemDialog).getByLabelText(/base price/i);
+    await user.clear(price);
+    await user.type(price, '12.34');
+    await user.click(within(itemDialog).getByRole('button', { name: /^add item$/i }));
+
+    await waitFor(() => expect(saveCatalogueItem).toHaveBeenCalledWith(expect.objectContaining({
+      categoryId: 'coffee',
+      name: 'Temporary Special',
+      basePriceSen: 1234,
+      isDrink: true,
+      isAvailable: true,
+      isPublished: true,
+      variants: [],
+      compatibleAddOnIds: [],
+    }), expect.anything()));
+  });
+
+  it('creates a category through the shared catalogue client', async () => {
     const user = userEvent.setup();
     renderRoute('/admin/catalogue/menu');
     await screen.findByText('Latte');
@@ -117,31 +169,18 @@ describe('Admin shared catalogue flows', () => {
       sortOrder: 20,
       isActive: true,
     }, expect.anything()));
-
-    await user.click(screen.getByRole('button', { name: /add item/i }));
-    const itemDialog = screen.getByRole('dialog', { name: 'Add menu item' });
-    await user.type(within(itemDialog).getByLabelText('Name'), 'Temporary Special');
-    const price = within(itemDialog).getByLabelText(/base price/i);
-    await user.clear(price);
-    await user.type(price, '12.34');
-    await user.click(within(itemDialog).getByRole('button', { name: /^add item$/i }));
-    await waitFor(() => expect(saveCatalogueItem).toHaveBeenCalledWith(expect.objectContaining({
-      categoryId: 'coffee',
-      name: 'Temporary Special',
-      basePriceSen: 1234,
-      isAvailable: true,
-      isPublished: true,
-      variants: [],
-      compatibleAddOnIds: [],
-    }), expect.anything()));
   });
 
-  it('edits base price, availability, publication, variants and compatible add-ons', async () => {
+  it('edits catalogue fields, per-drink options and compatible add-ons', async () => {
     const user = userEvent.setup();
     vi.mocked(saveCatalogueItem).mockResolvedValue('latte');
     renderRoute('/admin/catalogue/menu/latte');
 
     const name = await screen.findByLabelText('Display name');
+    expect(screen.getByRole('heading', { name: 'Drink options' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Temperature' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Sweetness' })).toBeInTheDocument();
+
     await user.clear(name);
     await user.type(name, 'Latte Updated');
     const price = screen.getByLabelText(/base price \(sen\)/i);
@@ -152,6 +191,21 @@ describe('Admin shared catalogue flows', () => {
     await user.click(screen.getByRole('button', { name: /add variant/i }));
     const labels = screen.getAllByLabelText('Label');
     await user.type(labels.at(-1)!, 'Large');
+
+    const customerLabels = screen.getAllByLabelText('Customer label');
+    await user.clear(customerLabels[1]!);
+    await user.type(customerLabels[1]!, 'Cold');
+
+    const temperatureCard = screen.getByRole('heading', { name: 'Temperature' }).closest('.modifier-group-card') as HTMLElement;
+    const temperatureAvailability = within(temperatureCard).getAllByLabelText('Available');
+    const temperatureDefaults = within(temperatureCard).getAllByLabelText('Default');
+    const temperatureDeltas = within(temperatureCard).getAllByLabelText('Price delta (sen)');
+    await user.click(temperatureAvailability[0]!);
+    expect(temperatureDefaults[0]).toBeDisabled();
+    expect(temperatureDefaults[1]).toBeChecked();
+    await user.clear(temperatureDeltas[1]!);
+    await user.type(temperatureDeltas[1]!, '75');
+
     await user.click(screen.getByLabelText(/oat milk/i));
     await user.click(screen.getByRole('button', { name: /save catalogue item/i }));
 
@@ -161,11 +215,31 @@ describe('Admin shared catalogue flows', () => {
       basePriceSen: 1125,
       isAvailable: false,
       isPublished: false,
+      isDrink: true,
       compatibleAddOnIds: [],
       variants: expect.arrayContaining([
         expect.objectContaining({ label: 'Medium', isDefault: true }),
         expect.objectContaining({ label: 'Large', isDefault: false }),
       ]),
+      customizationOptions: expect.arrayContaining([
+        expect.objectContaining({ optionValueId: 'hot', label: 'Hot', isAvailable: false, isDefault: false }),
+        expect.objectContaining({ optionValueId: 'iced', label: 'Cold', priceDeltaSen: 75, isAvailable: true, isDefault: true }),
+        expect.objectContaining({ optionValueId: 'regular', label: 'Regular', isDefault: true }),
+      ]),
     }), expect.anything()));
+  });
+
+  it('rejects saving a drink group with no available default', async () => {
+    const user = userEvent.setup();
+    renderRoute('/admin/catalogue/menu/latte');
+
+    const temperatureCard = (await screen.findByRole('heading', { name: 'Temperature' })).closest('.modifier-group-card') as HTMLElement;
+    const availability = within(temperatureCard).getAllByLabelText('Available');
+    await user.click(availability[0]!);
+    await user.click(availability[1]!);
+    await user.click(screen.getByRole('button', { name: /save catalogue item/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/at least one available option/i);
+    expect(saveCatalogueItem).not.toHaveBeenCalled();
   });
 });

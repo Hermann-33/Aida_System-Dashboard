@@ -55,7 +55,8 @@ export function ModifierSheet({ open, itemName, basePriceSen, groups, onConfirm,
     if (!available) return;
     setSelections((prev) => {
       const current = prev[group.id] || [];
-      if (group.max === 1) {
+      const singleChoice = group.required && group.min === 1 && group.max === 1;
+      if (singleChoice) {
         return { ...prev, [group.id]: [optionId] };
       }
       if (current.includes(optionId)) {
@@ -131,6 +132,7 @@ export function ModifierSheet({ open, itemName, basePriceSen, groups, onConfirm,
                 {group.options.map((opt) => {
                   const available = opt.available !== false;
                   const checked = (selections[group.id] || []).includes(opt.id);
+                  const singleChoice = group.required && group.min === 1 && group.max === 1;
                   return (
                     <label
                       key={opt.id}
@@ -143,7 +145,7 @@ export function ModifierSheet({ open, itemName, basePriceSen, groups, onConfirm,
                       }
                     >
                       <input
-                        type={group.max === 1 ? 'radio' : 'checkbox'}
+                        type={singleChoice ? 'radio' : 'checkbox'}
                         name={group.id}
                         checked={checked}
                         disabled={!available}

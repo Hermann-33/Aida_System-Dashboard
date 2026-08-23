@@ -35,7 +35,7 @@ const order = {
   id: 'order-1', orderNumber: 100015, source: 'pos', customerUserId: null, memberId: null,
   fulfillmentType: 'asap', requestedPickupAt: null, prepareAt: null,
   serverNow: '2026-08-14T00:00:00Z', scheduleState: null, status: 'confirmed', statusVersion: 1,
-  currency: 'MYR', pricingVersion: 1, subtotalSen: 1450, totalSen: 1450,
+  currency: 'MYR', pricingVersion: 2, subtotalSen: 1450, totalSen: 1450,
   createdAt: '2026-08-14T00:00:00Z', updatedAt: '2026-08-14T00:00:00Z',
   statusUpdatedAt: '2026-08-14T00:00:00Z', preparingAt: null, readyAt: null,
   completedAt: null, cancelledAt: null, lines: [],
@@ -57,10 +57,16 @@ describe('authoritative POS checkout', () => {
     vi.clearAllMocks();
     vi.mocked(fetchOrderingPolicy).mockResolvedValue(policy);
     vi.mocked(quoteOrder).mockResolvedValue({
-      pricingVersion: 1, currency: 'MYR', subtotalSen: 1450, totalSen: 1450,
+      pricingVersion: 2, currency: 'MYR', subtotalSen: 1450, totalSen: 1450,
       fulfillmentType: 'asap', requestedPickupAt: null, serverNow: policy.serverNow,
       schedulePolicy: { ...policy }, lines: [],
     });
+  });
+
+  it('uses Now as presentation copy while retaining the asap wire intent', async () => {
+    renderPanel();
+    expect(await screen.findByRole('button', { name: 'Now' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ASAP' })).not.toBeInTheDocument();
   });
 
   it('renders the server quote total and explicit unpaid pay-at-counter wording', async () => {

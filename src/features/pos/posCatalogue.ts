@@ -43,6 +43,24 @@ export function posModifierGroups(
     });
   }
 
+  for (const group of item.customizationGroups ?? []) {
+    groups.push({
+      id: `option:${group.id}`,
+      name: group.name,
+      required: true,
+      min: 1,
+      max: 1,
+      help: `Choose one ${group.name.toLowerCase()} option`,
+      options: group.options.map((option) => ({
+        id: option.id,
+        label: option.label,
+        priceDeltaSen: option.priceDeltaSen,
+        available: option.isAvailable,
+        isDefault: option.isDefault,
+      })),
+    });
+  }
+
   const compatibleIds = new Set(item.compatibleAddOnIds);
   const addOns = snapshot.items.filter(
     (candidate) => candidate.kind === 'addon'
@@ -56,7 +74,7 @@ export function posModifierGroups(
       required: false,
       min: 0,
       max: addOns.length,
-      help: 'Optional compatible add-ons',
+      help: 'Optional compatible add-ons for this line',
       options: addOns.map((addOn) => ({
         id: addOn.id,
         label: addOn.name,
