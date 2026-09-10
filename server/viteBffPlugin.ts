@@ -22,6 +22,23 @@ import {
   handleEmployeeTransitionOrder,
   handleOrderingPolicy,
 } from './orderBff.js';
+import {
+  handleAdminBranches,
+  handleAdminEmployees,
+  handleAdminSaveBranch,
+  handleAdminSaveEmployeeBranches,
+  handlePublicBranches,
+} from './locationBff.js';
+import {
+  handleAdminIssueTerminalCode,
+  handleAdminOperationalLocations,
+  handleAdminRevokeTerminal,
+  handleAdminSaveSalesPoint,
+  handleAdminSaveTerminal,
+  handleTerminalClearCredential,
+  handleTerminalEnrol,
+  handleTerminalStatus,
+} from './terminalBff.js';
 
 type Handler = (
   request: Request,
@@ -46,6 +63,19 @@ const handlers = new Map<string, Handler>([
   ['/api/v1/orders/place', handleEmployeePlaceOrder],
   ['/api/v1/orders/status', handleEmployeeTransitionOrder],
   ['/api/v1/admin/orders/policy', handleAdminSaveOrderingPolicy],
+  ['/api/v1/branches', handlePublicBranches],
+  ['/api/v1/admin/branches', handleAdminBranches],
+  ['/api/v1/admin/branches/save', handleAdminSaveBranch],
+  ['/api/v1/admin/employees', handleAdminEmployees],
+  ['/api/v1/admin/employees/branches', handleAdminSaveEmployeeBranches],
+  ['/api/v1/terminals/status', handleTerminalStatus],
+  ['/api/v1/terminals/enrol', handleTerminalEnrol],
+  ['/api/v1/terminals/clear-credential', handleTerminalClearCredential],
+  ['/api/v1/admin/locations', handleAdminOperationalLocations],
+  ['/api/v1/admin/sales-points/save', handleAdminSaveSalesPoint],
+  ['/api/v1/admin/terminals/save', handleAdminSaveTerminal],
+  ['/api/v1/admin/terminals/enrolment-code', handleAdminIssueTerminalCode],
+  ['/api/v1/admin/terminals/revoke', handleAdminRevokeTerminal],
 ]);
 
 function requestUrl(request: IncomingMessage): string {

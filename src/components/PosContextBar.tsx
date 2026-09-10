@@ -86,11 +86,12 @@ export function PosContextBar({ employee, location, shift, connection = 'online'
               <strong className="font-bold text-[var(--aida-gold)]">Access</strong> Global manager
             </span>
           )}
-          {operationalMode === 'preview' ? <>
-            <span><strong className="font-bold text-[var(--aida-gold)]">Branch</strong>{' '}{location?.branchName || location?.branchCode || '—'}</span>
-            <span><strong className="font-bold text-[var(--aida-gold)]">Sales point</strong>{' '}{location?.salesPointName || location?.salesPointCode || '—'}</span>
-            <span><strong className="font-bold text-[var(--aida-gold)]">Terminal</strong> {location?.terminalCode || '—'}</span>
-          </> : <span><strong className="font-bold text-[var(--aida-gold)]">Scope</strong> Global staff order queue; terminal and shift authority deferred</span>}
+          <span><strong className="font-bold text-[var(--aida-gold)]">Branch</strong>{' '}{location?.branchName || location?.branchCode || '—'}</span>
+          <span><strong className="font-bold text-[var(--aida-gold)]">Sales point</strong>{' '}{location?.salesPointName || location?.salesPointCode || '—'}</span>
+          <span><strong className="font-bold text-[var(--aida-gold)]">Terminal</strong> {location?.terminalCode || '—'}</span>
+          {operationalMode === 'live' && (
+            <span><strong className="font-bold text-[var(--aida-gold)]">Shift</strong> authority begins in Phase 2</span>
+          )}
           {shiftStarted && (
             <span>
               <strong className="font-bold text-[var(--aida-gold)]">Shift started</strong> {shiftStarted}

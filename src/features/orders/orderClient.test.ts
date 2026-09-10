@@ -28,6 +28,45 @@ const lines: CartLine[] = [{
   note: '  less foam  ',
 }];
 
+
+const baseOrderSnapshot = {
+  id: 'order-1',
+  orderNumber: 100001,
+  source: 'customer' as const,
+  customerUserId: 'customer-1',
+  memberId: 'member-1',
+  branchId: 'branch-main',
+  branch: {
+    id: 'branch-main',
+    code: 'BR-MAIN',
+    name: 'Main Café',
+    timezone: 'Asia/Kuala_Lumpur',
+  },
+  salesPointId: null,
+  salesPoint: null,
+  terminalId: null,
+  terminal: null,
+  fulfillmentType: 'asap' as const,
+  requestedPickupAt: null,
+  prepareAt: null,
+  serverNow: '2026-08-20T12:00:00Z',
+  scheduleState: null,
+  status: 'confirmed' as const,
+  statusVersion: 1,
+  currency: 'MYR' as const,
+  pricingVersion: 2,
+  subtotalSen: 1450,
+  totalSen: 1450,
+  createdAt: '2026-08-20T12:00:00Z',
+  updatedAt: '2026-08-20T12:00:00Z',
+  statusUpdatedAt: '2026-08-20T12:00:00Z',
+  preparingAt: null,
+  readyAt: null,
+  completedAt: null,
+  cancelledAt: null,
+  lines: [],
+};
+
 describe('order client trust boundary', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -58,10 +97,7 @@ describe('order client trust boundary', () => {
   it('uses employee same-origin endpoints for quote, place and queue', async () => {
     vi.mocked(employeeFetch)
       .mockResolvedValueOnce(new Response(JSON.stringify({ totalSen: 1450 }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        id: 'order-1', orderNumber: 100001, totalSen: 1450, prepareAt: null,
-        serverNow: '2026-08-20T12:00:00Z', scheduleState: null,
-      }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(baseOrderSnapshot), { status: 201 }))
       .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
 
     const intent = buildOrderIntent(lines, 'asap');
@@ -100,9 +136,60 @@ describe('order client trust boundary', () => {
 
   it('rejects malformed authoritative schedule classifications on order snapshots', async () => {
     vi.mocked(employeeFetch).mockResolvedValueOnce(new Response(JSON.stringify([{
-      id: 'order-1', orderNumber: 100001, prepareAt: '2026-08-20T12:00:00Z',
-      serverNow: '2026-08-20T12:15:00Z', scheduleState: 'preparing-soon',
+      ...baseOrderSnapshot,
+      prepareAt: '2026-08-20T12:00:00Z',
+      serverNow: '2026-08-20T12:15:00Z',
+      scheduleState: 'preparing-soon',
     }])));
+    await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
+  });
+
+
+  it('accepts trusted POS terminal attribution and rejects partial or customer terminal context', async () => {
+    vi.mocked(employeeFetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        ...baseOrderSnapshot,
+        source: 'pos',
+        customerUserId: null,
+        memberId: null,
+        salesPointId: 'sales-main',
+        salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' },
+        terminalId: 'terminal-main',
+        terminal: { id: 'terminal-main', code: 'POS-MAIN-01' },
+      }])))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        ...baseOrderSnapshot,
+        source: 'pos',
+        customerUserId: null,
+        memberId: null,
+        salesPointId: 'sales-main',
+        salesPoint: null,
+        terminalId: 'terminal-main',
+        terminal: { id: 'terminal-main', code: 'POS-MAIN-01' },
+      }])))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        ...baseOrderSnapshot,
+        source: 'customer',
+        salesPointId: 'sales-main',
+        salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' },
+        terminalId: 'terminal-main',
+        terminal: { id: 'terminal-main', code: 'POS-MAIN-01' },
+      }])));
+
+    await expect(fetchOrders()).resolves.toMatchObject([{
+      salesPoint: { code: 'SP-MAIN' },
+      terminal: { code: 'POS-MAIN-01' },
+    }]);
+    await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
+    await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
+  });
+
+  it('rejects a branch snapshot that disagrees with branchId', async () => {
+    vi.mocked(employeeFetch).mockResolvedValueOnce(new Response(JSON.stringify([{
+      ...baseOrderSnapshot,
+      branch: { ...baseOrderSnapshot.branch, id: 'branch-other' },
+    }])));
+
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
   });
 

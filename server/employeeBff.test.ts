@@ -66,6 +66,7 @@ describe('employee BFF', () => {
       }),
       jsonResponse({ id: 'admin-user', email: 'admin@example.test' }),
       jsonResponse([adminProfile]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
     ]);
 
     const response = await handleEmployeeLogin(request('/api/v1/auth/employee/login', {
@@ -76,6 +77,7 @@ describe('employee BFF', () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.data.employee.role).toBe('admin');
+    expect(body.data.employee.assignedBranchIds).toEqual(['branch-main']);
     expect(JSON.stringify(body)).not.toContain('admin-access');
     expect(JSON.stringify(body)).not.toContain('admin-refresh');
     const cookies = response.headers.get('set-cookie') ?? '';
@@ -135,6 +137,7 @@ describe('employee BFF', () => {
       jsonResponse({ access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 3600 }),
       jsonResponse({ id: 'admin-user', email: 'admin@example.test' }),
       jsonResponse([adminProfile]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
     ]);
 
     const response = await handleEmployeeSession(request('/api/v1/auth/employee/session', {
@@ -153,6 +156,7 @@ describe('employee BFF', () => {
     const { deps, calls } = depsWith([
       jsonResponse({ id: 'admin-user', email: 'admin@example.test' }),
       jsonResponse([adminProfile]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
       jsonResponse([{
         member_id: 'member-1',
         user_id: 'customer-1',
@@ -172,7 +176,7 @@ describe('employee BFF', () => {
 
     expect(response.status).toBe(200);
     expect((await response.json()).members[0].memberCode).toBe('AIDA-1234-5678');
-    const rpcCall = calls[2];
+    const rpcCall = calls[3];
     expect(rpcCall?.url).toContain('/rest/v1/rpc/list_admin_members');
     expect(new Headers(rpcCall?.init?.headers).get('Authorization')).toBe('Bearer admin-access');
     expect(new Headers(rpcCall?.init?.headers).get('Authorization')).not.toContain('sb_publishable_test');
@@ -182,6 +186,7 @@ describe('employee BFF', () => {
     const { deps, calls } = depsWith([
       jsonResponse({ id: 'staff-user', email: 'staff@example.test' }),
       jsonResponse([staffProfile]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
     ]);
 
     const response = await handleAdminMembers(request('/api/v1/admin/members', {
@@ -190,7 +195,23 @@ describe('employee BFF', () => {
 
     expect(response.status).toBe(403);
     expect((await response.json()).code).toBe('ADMIN_REQUIRED');
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
+  });
+
+  it('fails closed when ordinary staff has no trusted branch assignment', async () => {
+    const { deps } = depsWith([
+      jsonResponse({ id: 'staff-user', email: 'staff@example.test' }),
+      jsonResponse([staffProfile]),
+      jsonResponse([]),
+    ]);
+
+    const response = await handleEmployeeSession(request('/api/v1/auth/employee/session', {
+      headers: { cookie: 'aida_employee_access=staff-access; aida_employee_refresh=staff-refresh' },
+    }), deps);
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).code).toBe('EMPLOYEE_BRANCH_REQUIRED');
+    expect(response.headers.get('set-cookie') ?? '').toContain('Max-Age=0');
   });
 
   it('rejects cross-origin login requests', async () => {

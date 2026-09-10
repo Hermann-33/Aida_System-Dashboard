@@ -96,12 +96,36 @@ export type OrderQuote = {
   lines: OrderLineSnapshot[];
 };
 
+export type OrderBranchSnapshot = {
+  id: string;
+  code: string;
+  name: string;
+  timezone: string;
+};
+
+export type OrderSalesPointSnapshot = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+export type OrderTerminalSnapshot = {
+  id: string;
+  code: string;
+};
+
 export type OrderSnapshot = {
   id: string;
   orderNumber: number;
   source: 'customer' | 'pos';
   customerUserId: string | null;
   memberId: string | null;
+  branchId: string;
+  branch: OrderBranchSnapshot;
+  salesPointId: string | null;
+  salesPoint: OrderSalesPointSnapshot | null;
+  terminalId: string | null;
+  terminal: OrderTerminalSnapshot | null;
   fulfillmentType: FulfillmentType;
   requestedPickupAt: string | null;
   prepareAt: string | null;
@@ -190,6 +214,13 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
   if (!isRecord(value)
     || typeof value.id !== 'string'
     || typeof value.orderNumber !== 'number'
+    || (value.source !== 'customer' && value.source !== 'pos')
+    || typeof value.branchId !== 'string'
+    || !isRecord(value.branch)
+    || value.branch.id !== value.branchId
+    || typeof value.branch.code !== 'string'
+    || typeof value.branch.name !== 'string'
+    || typeof value.branch.timezone !== 'string'
     || !isIsoTimestamp(value.serverNow)
     || !(value.prepareAt === null || isIsoTimestamp(value.prepareAt))
     || !(value.scheduleState === null
@@ -198,6 +229,36 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
       || value.scheduleState === 'overdue')) {
     return invalidResponse('Order response is invalid.');
   }
+
+  const salesPoint = isRecord(value.salesPoint) ? value.salesPoint : null;
+  const terminal = isRecord(value.terminal) ? value.terminal : null;
+  const hasSalesPointId = typeof value.salesPointId === 'string';
+  const hasTerminalId = typeof value.terminalId === 'string';
+  const hasOperationalContext =
+    hasSalesPointId || hasTerminalId || salesPoint !== null || terminal !== null;
+
+  if (hasOperationalContext) {
+    if (!hasSalesPointId
+      || !hasTerminalId
+      || salesPoint === null
+      || terminal === null
+      || salesPoint.id !== value.salesPointId
+      || typeof salesPoint.code !== 'string'
+      || typeof salesPoint.name !== 'string'
+      || terminal.id !== value.terminalId
+      || typeof terminal.code !== 'string'
+      || value.source !== 'pos') {
+      return invalidResponse('Order operational attribution is invalid.');
+    }
+  } else if (
+    value.salesPointId !== null
+    || value.terminalId !== null
+    || value.salesPoint !== null
+    || value.terminal !== null
+  ) {
+    return invalidResponse('Order operational attribution is invalid.');
+  }
+
   return value as OrderSnapshot;
 }
 

@@ -4,10 +4,12 @@ import {
   getEmployeeSession,
   loginWithBadge,
   loginWithPassword,
+  logoutEmployee,
   refreshEmployeeSessionFromServer,
 } from '../auth/employeeSession';
 import { resolvePostLoginPath } from '../auth/permissions';
 import type { TerminalLocation } from '../auth/types';
+import { enrolTerminal, fetchTerminalStatus } from '../auth/terminalCredential';
 import {
   PREVIEW_DEMO_NOTICE,
   PREVIEW_EXPIRED_ENROLMENT_CODE,
@@ -62,29 +64,47 @@ export function EmployeeWelcomePage() {
   const [busy, setBusy] = useState(false);
   const [location, setLocation] = useState<TerminalLocation | null>(null);
   const [needsEnrol, setNeedsEnrol] = useState(false);
+  const [terminalAccessBlocked, setTerminalAccessBlocked] = useState(false);
   const [enrolCode, setEnrolCode] = useState(
     preview ? PREVIEW_SAMPLE_ENROLMENT_CODE : '',
   );
   const [sampleExpiresInSec, setSampleExpiresInSec] = useState(15 * 60);
   const badgeRef = useRef<HTMLInputElement>(null);
 
-  const resolveTerminal = useCallback(async () => {
-    if (!preview) return;
-    const status = await previewTerminalRepository.getStatus();
+  const resolveTerminal = useCallback(async (): Promise<TerminalLocation | null> => {
+    const status = preview
+      ? await previewTerminalRepository.getStatus()
+      : await fetchTerminalStatus();
+
     if (!status.enrolled) {
-      setNeedsEnrol(true);
       setLocation(null);
-      return;
+      if (status.code === 'TERMINAL_BRANCH_FORBIDDEN') {
+        setNeedsEnrol(false);
+        setTerminalAccessBlocked(true);
+        setError('Your employee account is not authorised for this terminal branch.');
+      } else {
+        setTerminalAccessBlocked(false);
+        setNeedsEnrol(true);
+      }
+      return null;
     }
+
+    setTerminalAccessBlocked(false);
     setLocation(status.location);
     setNeedsEnrol(false);
+    return status.location;
   }, [preview]);
 
   useEffect(() => {
     void (async () => {
       const session = await refreshEmployeeSessionFromServer();
       if (session.status === 'authenticated' && session.identity) {
-        navigate(resolvePostLoginPath(session.identity), { replace: true });
+        const target = resolvePostLoginPath(session.identity);
+        if (target.startsWith('/pos')) {
+          const terminal = await resolveTerminal();
+          if (!terminal) return;
+        }
+        navigate(target, { replace: true });
         return;
       }
       if (preview) await resolveTerminal();
@@ -104,21 +124,32 @@ export function EmployeeWelcomePage() {
     setError('');
     setBusy(true);
     try {
-      if (!preview) return;
-      if (sampleExpiresInSec <= 0 && enrolCode.trim().toUpperCase() === PREVIEW_SAMPLE_ENROLMENT_CODE) {
+      if (preview && sampleExpiresInSec <= 0 && enrolCode.trim().toUpperCase() === PREVIEW_SAMPLE_ENROLMENT_CODE) {
         setError('This enrolment code has expired. Ask a manager to issue a new code.');
         return;
       }
-      const result = await previewTerminalRepository.enrol(enrolCode);
+
+      const result = preview
+        ? await previewTerminalRepository.enrol(enrolCode)
+        : await enrolTerminal(enrolCode);
+
       if (!result.ok) {
         setError(result.message);
         return;
       }
+
       setEnrolCode('');
       setLocation(result.location);
       setNeedsEnrol(false);
+
+      if (!preview) {
+        const identity = getEmployeeSession().identity;
+        if (identity) {
+          navigate(resolvePostLoginPath(identity), { replace: true });
+        }
+      }
     } catch {
-      setError('Enrolment failed');
+      setError('Terminal activation failed');
     } finally {
       setBusy(false);
     }
@@ -127,7 +158,14 @@ export function EmployeeWelcomePage() {
   async function afterLogin() {
     const identity = getEmployeeSession().identity;
     if (!identity) return;
-    navigate(resolvePostLoginPath(identity), { replace: true });
+
+    const target = resolvePostLoginPath(identity);
+    if (target.startsWith('/pos')) {
+      const terminal = await resolveTerminal();
+      if (!terminal) return;
+    }
+
+    navigate(target, { replace: true });
   }
 
   async function onPasswordLogin(e: FormEvent) {
@@ -180,6 +218,34 @@ export function EmployeeWelcomePage() {
   }
 
   const expireLabel = `${Math.floor(sampleExpiresInSec / 60)}:${String(sampleExpiresInSec % 60).padStart(2, '0')}`;
+
+  if (terminalAccessBlocked) {
+    return (
+      <EmployeeAuthShell
+        titleId="terminal-access-blocked-title"
+        kicker="Location access"
+        title="Branch access required"
+        lede="This terminal is active, but your employee account is not authorised for its branch."
+      >
+        <p role="alert" className="text-sm font-semibold text-destructive">
+          {error || 'Ask an administrator to update your branch assignment.'}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Do not reactivate the terminal. Its device credential remains valid for employees who are authorised for this branch.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void logoutEmployee().then(() => {
+            setTerminalAccessBlocked(false);
+            setError('');
+          })}
+        >
+          Sign out
+        </Button>
+      </EmployeeAuthShell>
+    );
+  }
 
   if (needsEnrol) {
     return (
@@ -241,9 +307,7 @@ export function EmployeeWelcomePage() {
           </aside>
         ) : (
           <p role="note" className="text-sm text-muted-foreground">
-            Live enrolment requires a manager-issued OTC from Team 2 API. Enable{' '}
-            <code className="rounded bg-card px-1.5 py-0.5 font-mono">VITE_UI_PREVIEW_MODE=true</code> for the UI
-            prototype path.
+            Enter the short-lived activation code issued by an administrator for this physical terminal.
           </p>
         )}
 
@@ -267,6 +331,18 @@ export function EmployeeWelcomePage() {
           <Button type="submit" disabled={busy} className="w-full">
             {busy ? 'Activating…' : 'Activate terminal'}
           </Button>
+          {!preview && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void logoutEmployee().then(() => {
+                setNeedsEnrol(false);
+                setLocation(null);
+              })}
+            >
+              Sign out
+            </Button>
+          )}
         </form>
       </EmployeeAuthShell>
     );

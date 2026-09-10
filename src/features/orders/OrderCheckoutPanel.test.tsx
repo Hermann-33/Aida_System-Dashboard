@@ -33,6 +33,9 @@ const policy = {
 
 const order = {
   id: 'order-1', orderNumber: 100015, source: 'pos', customerUserId: null, memberId: null,
+  branchId: 'branch-main', branch: { id: 'branch-main', code: 'BR-MAIN', name: 'Main Café', timezone: 'Asia/Kuala_Lumpur' },
+  salesPointId: 'sales-main', salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' },
+  terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' },
   fulfillmentType: 'asap', requestedPickupAt: null, prepareAt: null,
   serverNow: '2026-08-14T00:00:00Z', scheduleState: null, status: 'confirmed', statusVersion: 1,
   currency: 'MYR', pricingVersion: 2, subtotalSen: 1450, totalSen: 1450,
