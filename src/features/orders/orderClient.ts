@@ -230,23 +230,23 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
     return invalidResponse('Order response is invalid.');
   }
 
+  const salesPoint = isRecord(value.salesPoint) ? value.salesPoint : null;
+  const terminal = isRecord(value.terminal) ? value.terminal : null;
   const hasSalesPointId = typeof value.salesPointId === 'string';
   const hasTerminalId = typeof value.terminalId === 'string';
-  const hasSalesPoint = isRecord(value.salesPoint);
-  const hasTerminal = isRecord(value.terminal);
   const hasOperationalContext =
-    hasSalesPointId || hasTerminalId || hasSalesPoint || hasTerminal;
+    hasSalesPointId || hasTerminalId || salesPoint !== null || terminal !== null;
 
   if (hasOperationalContext) {
     if (!hasSalesPointId
       || !hasTerminalId
-      || !hasSalesPoint
-      || !hasTerminal
-      || value.salesPoint.id !== value.salesPointId
-      || typeof value.salesPoint.code !== 'string'
-      || typeof value.salesPoint.name !== 'string'
-      || value.terminal.id !== value.terminalId
-      || typeof value.terminal.code !== 'string'
+      || salesPoint === null
+      || terminal === null
+      || salesPoint.id !== value.salesPointId
+      || typeof salesPoint.code !== 'string'
+      || typeof salesPoint.name !== 'string'
+      || terminal.id !== value.terminalId
+      || typeof terminal.code !== 'string'
       || value.source !== 'pos') {
       return invalidResponse('Order operational attribution is invalid.');
     }
