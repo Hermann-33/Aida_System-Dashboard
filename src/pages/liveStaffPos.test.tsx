@@ -112,7 +112,7 @@ describe('live staff POS access', () => {
 
     expect(await screen.findByRole('heading', { name: /activate this terminal/i })).toBeInTheDocument();
     expect(screen.queryByText('POS destination')).not.toBeInTheDocument();
-    expect(screen.getByText(/manager-issued activation code/i)).toBeInTheDocument();
+    expect(screen.getByText(/one-time code issued by a manager/i)).toBeInTheDocument();
   });
 
   it('renders live POS only with trusted terminal context and does not invent a shift', async () => {
