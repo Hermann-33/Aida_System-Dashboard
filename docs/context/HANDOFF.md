@@ -1,12 +1,12 @@
 # Current Handoff
 
-Updated: 2026-08-23
+Updated: 2026-09-10
 
 ## Task
 
-`TASK-MENU-CUSTOMIZATION-001 — per-drink option groups, per-line add-ons, Now terminology, and post-add navigation`
+`TASK-UI-REDESIGN-004 — audited customer UI refresh and safe future-work preservation`
 
-**Verdict:** COMPLETE.
+**Verdict:** READY TO MERGE.
 
 Detailed implementation/validation evidence:
 
@@ -149,3 +149,93 @@ After a customer merge, build a fresh APK from the merged customer default branc
 ## Deferred domains
 
 Branch authority/capacity, terminal/sales-point lifecycle, shifts/cash reconciliation, payment/refunds, loyalty, inventory, promotions/discounts, tax/accounting/reporting, delivery and hosted production operations remain separate tasks.
+
+## 2026-09-10 — TASK-UI-REDESIGN-004 final handoff
+
+PR #19 carries the audited integration from `codex/task-ui-redesign-004-audit-integration`.
+
+Final accepted scope:
+
+- reviewed customer UI/branding refresh is active;
+- all demo-only order/status/test tooling is removed;
+- account-deletion/referral SQL prototypes are preserved under `supabase/drafts/`, not canonical migrations;
+- related account-deletion/referral client surfaces are compile-time gated off by default;
+- useful iOS migration observations are documented, while stale generated Xcode/CocoaPods state is excluded;
+- production order status remains Supabase-authoritative;
+- generated golden failure artifacts are excluded.
+
+Release compatibility correction:
+
+- `share_plus 13.3.0` caused the release APK build to fail because that package generation requires Kotlin 2.2-era Android artifacts;
+- the dormant referral-sharing prototype is pinned to `share_plus 11.1.0` instead of forcing an unrelated Android toolchain migration in this UI task;
+- lockfile dependencies are reconciled accordingly.
+
+Executable validation:
+
+- workflow: Customer release audit run #87;
+- code head: `7388c1bd40b7da4c0ce56041b8e0e02ece3847db`;
+- dependency resolution PASS;
+- Flutter analyze PASS;
+- non-golden regression PASS;
+- golden regression PASS;
+- release APK build PASS;
+- release APK upload PASS.
+
+The subsequent branch changes are documentation-only closeout. PR #19 must be squash-merged so the original mixed source-branch ancestry does not enter `master`.
+
+
+
+## 2026-09-10 — TASK-OPS-001 branch authority handoff
+
+**Verdict:** PARTIAL.
+
+Matching task branches:
+
+```text
+Hermann-33/Aida_System
+  codex/task-ops-001-branch-authority
+
+Hermann-33/Aida_System-Dashboard
+  codex/task-ops-001-branch-authority
+```
+
+Live backend changes:
+
+- deployed `20260910014434 create_branch_location_authority`;
+- deployed `20260910014457 index_employee_branch_assignment_actor`;
+- created trusted `BR-MAIN — Main Café`;
+- added `branches` and `employee_branch_assignments`;
+- added immutable non-null `orders.branch_id`;
+- backfilled all existing orders and employee scopes;
+- scoped ordinary staff order reads/status transitions by branch;
+- preserved Admin/Owner global scope and existing-client default-branch compatibility;
+- added Admin/Owner branch and employee-assignment RPCs;
+- preserved RLS/FORCE-RLS and caller-JWT architecture.
+
+Live verification:
+
+```text
+branches                  1
+active defaults           1
+orders without branch     0 / 25
+employee assignments      3
+staff without assignment  0
+security advisor          1 pre-existing WARN only
+new unindexed FK findings 0
+```
+
+Repository integration:
+
+- canonical migration files recorded in the customer repository;
+- branch authority SQL regression added;
+- Dashboard employee BFF now loads trusted `assignedBranchIds`;
+- missing staff assignment fails closed;
+- BFF unit tests updated.
+
+Remaining gate:
+
+- execute `supabase/tests/branch_authority_integration.sql` on a writable local/dev database;
+- run Dashboard lint/typecheck/Vitest/build on the task branch;
+- wire Admin Locations/Employees to the new trusted branch APIs in a bounded Dashboard task.
+
+Exact next backend dependency: trusted sales-point/terminal authority under branches, followed by shift/cash authority. Branch opening-hours/capacity remains a separate scheduling task.
