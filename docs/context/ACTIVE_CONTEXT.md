@@ -1,16 +1,36 @@
 # Active Context
 
-**As of:** 2026-08-23
-**Current task:** `TASK-MENU-CUSTOMIZATION-001 — per-drink option groups, per-line add-ons, Now terminology, and post-add navigation`
-**Current verdict:** COMPLETE — live Supabase catalogue/order customization authority is in place; Customer and Dashboard/POS integrations pass executable validation and UI/theme review; backend grants/RLS/advisors and canonical documentation are reconciled.
+**As of:** 2026-09-10
+**Current task:** `TASK-OPS-001 — branch/location authority foundation`
+**Current verdict:** PARTIAL — live Supabase branch authority is deployed and repository integration is in progress; executable writable-database regression and Dashboard location-management wiring remain open.
 
-Detailed closeout evidence:
+Detailed current evidence:
+
+- `docs/frontend/UI_REDESIGN_AUDIT_2026-09-09.md`
+- PR #19 / `codex/task-ui-redesign-004-audit-integration`
+- customer release audit run #87 PASS on code head `7388c1bd40b7da4c0ce56041b8e0e02ece3847db`
+
+Previous menu-customization closeout remains COMPLETE and is documented in:
 
 - `docs/context/MENU_CUSTOMIZATION_2026-08-23.md`
 
 Previous scheduled-order operations work remains COMPLETE and is documented in:
 
 - `docs/context/SCHEDULED_ORDER_OPERATIONS_2026-08-20.md`
+
+## TASK-UI-REDESIGN-004 current integration
+
+The final integration accepts the reviewed mobile presentation refresh and excludes all demo-only order/status/test tooling. Production order status remains persisted Supabase state only.
+
+Useful future work is preserved without becoming live authority:
+
+- account-deletion/referral SQL prototypes live only under `supabase/drafts/`;
+- `AIDA_ENABLE_ACCOUNT_DELETION_DRAFT` defaults false;
+- `AIDA_ENABLE_REFERRAL_DRAFT` defaults false;
+- no new canonical Supabase migration is introduced;
+- referral sharing is pinned to `share_plus 11.1.0` to remain compatible with the current Android toolchain until a dedicated Android modernization task.
+
+The reviewed UI remains within AIDA's existing cream/coffee/espresso/rose theme and accepted typography/control language.
 
 ## Current product reality
 
@@ -157,3 +177,44 @@ No PR or merge is part of this closeout. Merge, APK build/install and hosted rel
 - tax/accounting/reporting;
 - delivery;
 - hosted production deployment.
+
+
+## TASK-OPS-001 — branch/location authority foundation
+
+Live Supabase now contains trusted branch authority:
+
+- `branches` with one active default `BR-MAIN — Main Café`;
+- `employee_branch_assignments` for trusted employee operational scope;
+- immutable `orders.branch_id`, backfilled for all pre-existing orders;
+- ordinary staff order reads/transitions restricted to assigned branches;
+- Admin/Owner remain global operational roles for this tranche;
+- existing customer/POS payloads remain compatible by resolving the active default branch server-side;
+- branch directory and employee-assignment mutation RPCs are Admin/Owner-authorized;
+- all new exposed tables use RLS + FORCE RLS and explicit Data API grants.
+
+Live migrations:
+
+```text
+20260910014434 create_branch_location_authority
+20260910014457 index_employee_branch_assignment_actor
+```
+
+Current live verification:
+
+```text
+branches                  1
+active default branches   1
+default code              BR-MAIN
+orders without branch     0
+existing orders           25
+employee assignments      3
+staff without assignment  0
+```
+
+Dashboard task-branch integration replaces the hardcoded empty `assignedBranchIds` session claim with caller-JWT-backed `employee_branch_assignments` reads and fails closed for ordinary staff with no branch assignment.
+
+Validation gap: the connected SQL inspection role is read-only, so `supabase/tests/branch_authority_integration.sql` is committed but has not been executed against a writable local/dev database in this session.
+
+The previous customer UI redesign PR #19 is merged and closed. Any earlier `READY TO MERGE` wording for PR #19 is historical/stale.
+
+Accepted decision: `docs/decisions/ADR-0011-branch-authority-and-operational-scope.md`.
