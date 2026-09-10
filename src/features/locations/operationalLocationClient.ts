@@ -196,3 +196,62 @@ export async function revokeOperationalTerminal(
   const body = await responseBody(res);
   return terminal(body.data);
 }
+
+
+export type AdminEmployee = {
+  userId: string;
+  email: string;
+  displayName: string | null;
+  appRole: 'staff' | 'admin' | 'owner';
+  disabledAt: string | null;
+  branchIds: string[];
+};
+
+function adminEmployee(value: unknown): AdminEmployee {
+  const row = record(value);
+  const appRole = string(row.appRole, 'employee.appRole');
+  if (appRole !== 'staff' && appRole !== 'admin' && appRole !== 'owner') {
+    throw new Error('Invalid employee role');
+  }
+  if (!Array.isArray(row.branchIds)) {
+    throw new Error('Invalid employee branch assignments');
+  }
+  return {
+    userId: string(row.userId, 'employee.userId'),
+    email: string(row.email, 'employee.email'),
+    displayName: nullableString(row.displayName),
+    appRole,
+    disabledAt: nullableString(row.disabledAt),
+    branchIds: row.branchIds.map((value) => string(value, 'employee.branchId')),
+  };
+}
+
+export async function fetchAdminEmployees(): Promise<AdminEmployee[]> {
+  const res = await employeeFetch('/api/v1/admin/employees');
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    const row = body && typeof body === 'object' && !Array.isArray(body)
+      ? body as JsonRecord
+      : {};
+    throw new Error(typeof row.error === 'string' ? row.error : 'Employee directory request failed');
+  }
+  if (!Array.isArray(body)) {
+    throw new Error('Employee directory is invalid');
+  }
+  return body.map(adminEmployee);
+}
+
+export async function saveEmployeeBranchAssignments(
+  userId: string,
+  branchIds: string[],
+): Promise<string[]> {
+  const res = await employeeFetch('/api/v1/admin/employees/branches', {
+    method: 'POST',
+    body: JSON.stringify({ userId, branchIds }),
+  });
+  const body = await responseBody(res);
+  if (!Array.isArray(body.branchIds)) {
+    throw new Error('Employee branch assignment response is invalid');
+  }
+  return body.branchIds.map((value) => string(value, 'employee.branchId'));
+}
