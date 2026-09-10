@@ -164,12 +164,43 @@ describe('terminal BFF', () => {
     });
   });
 
+  it('preserves the physical terminal cookie when only the employee branch scope is denied', async () => {
+    const { deps } = depsWith([
+      jsonResponse({ id: 'staff-user', email: 'staff@example.test' }),
+      jsonResponse([staffProfile]),
+      jsonResponse([{ branch_id: 'branch-other' }]),
+      jsonResponse({
+        code: '42501',
+        message: 'employee is not authorized for the terminal branch',
+        details: 'TERMINAL_BRANCH_FORBIDDEN',
+      }, 403),
+    ]);
+
+    const response = await handleTerminalStatus(
+      request('/api/v1/terminals/status', {
+        headers: {
+          cookie:
+            'aida_employee_access=employee-access; aida_employee_refresh=refresh-token; aida_terminal_credential=terminal-secret-abcdefghijklmnopqrstuvwxyz-1234567890',
+        },
+      }),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.code).toBe('TERMINAL_BRANCH_FORBIDDEN');
+    expect(response.headers.get('set-cookie') ?? '').not.toContain('aida_terminal_credential=');
+  });
+
   it('clears an invalid terminal cookie when the backend rejects it', async () => {
     const { deps } = depsWith([
       jsonResponse({ id: 'staff-user', email: 'staff@example.test' }),
       jsonResponse([staffProfile]),
       jsonResponse([{ branch_id: 'branch-main' }]),
-      jsonResponse({ code: '42501', message: 'terminal credential is invalid or expired' }, 403),
+      jsonResponse({
+        code: '42501',
+        message: 'terminal credential is invalid or expired',
+        details: 'TERMINAL_CREDENTIAL_INVALID',
+      }, 403),
     ]);
 
     const response = await handleTerminalStatus(
