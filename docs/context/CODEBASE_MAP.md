@@ -125,3 +125,37 @@ TASK-MENU-CUSTOMIZATION-001 is COMPLETE on matching task branches after:
 Detailed evidence: `docs/context/MENU_CUSTOMIZATION_2026-08-23.md`.
 
 No PR/merge is included in this closeout. Payment, loyalty, inventory, reporting, branch/capacity, terminal/shift and hosted-production domains remain deferred.
+
+## 2026-09-09 customer redesign / preserved future work
+
+New/updated customer areas:
+
+- `apps/customer/lib/core/widgets/aida_popup.dart` — shared transient customer feedback overlay.
+- `apps/customer/lib/core/config/feature_flags.dart` — compile-time gates for preserved account-deletion/referral client surfaces.
+- `apps/customer/lib/features/splash/splash_screen.dart` — branded startup presentation that hands off to the existing Auth gate.
+- `apps/customer/lib/features/profile/settings_screen.dart` — redesigned Settings surface; account deletion remains draft-gated.
+- `apps/customer/lib/features/order_progress/liquid_stage_tracker.dart` — presentation for real persisted order status.
+- `supabase/drafts/` — preserved, non-applied privacy/referral backend prototypes.
+- `docs/frontend/UI_REDESIGN_AUDIT_2026-09-09.md` — final audit/merge boundaries.
+- `docs/frontend/IOS_TOOLCHAIN_DRAFT_2026-08-29.md` — retained iOS migration/toolchain observations.
+
+Demo-only order-progress provider/capsule/staff-test tooling is intentionally absent from the final tree.
+
+
+
+## TASK-OPS-001 branch authority additions
+
+### Canonical Supabase migrations
+
+- `supabase/migrations/20260910014434_create_branch_location_authority.sql` — trusted branch directory, employee assignments, immutable order branch identity, branch-scoped order authorization and Admin/Owner branch RPCs.
+- `supabase/migrations/20260910014457_index_employee_branch_assignment_actor.sql` — FK-supporting actor index identified by the Supabase performance advisor.
+- `supabase/tests/branch_authority_integration.sql` — transactional branch/RLS/role/order-scope regression; committed but not executed in this session because the connected inspection role is read-only.
+
+### Dashboard employee session
+
+- `server/employeeBff.ts` on `codex/task-ops-001-branch-authority` reads `employee_branch_assignments` with the authenticated employee caller JWT and returns real `assignedBranchIds`.
+- ordinary staff with no trusted assignment fail closed with `EMPLOYEE_BRANCH_REQUIRED`;
+- Admin/Owner preserve global operational authority for this tranche;
+- `server/employeeBff.test.ts` covers branch-claim mapping and missing-assignment failure.
+
+The existing `AdminLocationsPage.tsx` and `AdminEmployeesPage.tsx` remain preview/session-local presentation until their dedicated BFF/API wiring task. Their fixture branch data is not backend authority.
