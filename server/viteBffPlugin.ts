@@ -22,6 +22,13 @@ import {
   handleEmployeeTransitionOrder,
   handleOrderingPolicy,
 } from './orderBff.js';
+import {
+  handleAdminBranches,
+  handleAdminEmployees,
+  handleAdminSaveBranch,
+  handleAdminSaveEmployeeBranches,
+  handlePublicBranches,
+} from './locationBff.js';
 
 type Handler = (
   request: Request,
@@ -46,6 +53,11 @@ const handlers = new Map<string, Handler>([
   ['/api/v1/orders/place', handleEmployeePlaceOrder],
   ['/api/v1/orders/status', handleEmployeeTransitionOrder],
   ['/api/v1/admin/orders/policy', handleAdminSaveOrderingPolicy],
+  ['/api/v1/branches', handlePublicBranches],
+  ['/api/v1/admin/branches', handleAdminBranches],
+  ['/api/v1/admin/branches/save', handleAdminSaveBranch],
+  ['/api/v1/admin/employees', handleAdminEmployees],
+  ['/api/v1/admin/employees/branches', handleAdminSaveEmployeeBranches],
 ]);
 
 function requestUrl(request: IncomingMessage): string {
