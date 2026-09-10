@@ -64,6 +64,7 @@ export function EmployeeWelcomePage() {
   const [busy, setBusy] = useState(false);
   const [location, setLocation] = useState<TerminalLocation | null>(null);
   const [needsEnrol, setNeedsEnrol] = useState(false);
+  const [terminalAccessBlocked, setTerminalAccessBlocked] = useState(false);
   const [enrolCode, setEnrolCode] = useState(
     preview ? PREVIEW_SAMPLE_ENROLMENT_CODE : '',
   );
@@ -76,11 +77,19 @@ export function EmployeeWelcomePage() {
       : await fetchTerminalStatus();
 
     if (!status.enrolled) {
-      setNeedsEnrol(true);
       setLocation(null);
+      if (status.code === 'TERMINAL_BRANCH_FORBIDDEN') {
+        setNeedsEnrol(false);
+        setTerminalAccessBlocked(true);
+        setError('Your employee account is not authorised for this terminal branch.');
+      } else {
+        setTerminalAccessBlocked(false);
+        setNeedsEnrol(true);
+      }
       return null;
     }
 
+    setTerminalAccessBlocked(false);
     setLocation(status.location);
     setNeedsEnrol(false);
     return status.location;
@@ -209,6 +218,34 @@ export function EmployeeWelcomePage() {
   }
 
   const expireLabel = `${Math.floor(sampleExpiresInSec / 60)}:${String(sampleExpiresInSec % 60).padStart(2, '0')}`;
+
+  if (terminalAccessBlocked) {
+    return (
+      <EmployeeAuthShell
+        titleId="terminal-access-blocked-title"
+        kicker="Location access"
+        title="Branch access required"
+        lede="This terminal is active, but your employee account is not authorised for its branch."
+      >
+        <p role="alert" className="text-sm font-semibold text-destructive">
+          {error || 'Ask an administrator to update your branch assignment.'}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Do not reactivate the terminal. Its device credential remains valid for employees who are authorised for this branch.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void logoutEmployee().then(() => {
+            setTerminalAccessBlocked(false);
+            setError('');
+          })}
+        >
+          Sign out
+        </Button>
+      </EmployeeAuthShell>
+    );
+  }
 
   if (needsEnrol) {
     return (
