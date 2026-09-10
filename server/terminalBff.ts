@@ -421,12 +421,16 @@ export async function handleAdminOperationalLocations(
 
   const upstream = await rpc('list_admin_operational_locations', {}, auth.accessToken, deps);
   if (!upstream.ok) {
-    return adminRpcResponse(
-      'list_admin_operational_locations',
-      {},
-      auth,
-      deps,
-      'Operational locations are unavailable',
+    const detail = await upstreamDetail(upstream);
+    const pgCode = postgresCode(detail);
+    const message = postgresMessage(detail, 'Operational locations are unavailable');
+    if (upstream.status === 401 || upstream.status === 403 || pgCode === '42501') {
+      return json({ error: message, code: 'ADMIN_REQUIRED' }, 403, auth.responseCookies);
+    }
+    return json(
+      { error: 'Operational locations are unavailable', code: 'OPERATIONAL_LOCATIONS_UNAVAILABLE' },
+      502,
+      auth.responseCookies,
     );
   }
 
