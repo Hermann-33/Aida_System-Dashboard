@@ -185,6 +185,10 @@ function postgresMessage(detail: Record<string, unknown>, fallback: string): str
   return typeof detail.message === 'string' ? detail.message : fallback;
 }
 
+function postgresDetailCode(detail: Record<string, unknown>): string {
+  return typeof detail.details === 'string' ? detail.details : '';
+}
+
 export async function handleTerminalStatus(
   request: Request,
   deps: EmployeeBffDependencies = {},
@@ -215,13 +219,32 @@ export async function handleTerminalStatus(
   if (!upstream.ok) {
     const detail = await upstreamDetail(upstream);
     const code = postgresCode(detail);
-    if (upstream.status === 401 || upstream.status === 403 || code === '42501') {
+    const detailCode = postgresDetailCode(detail);
+
+    if (detailCode === 'TERMINAL_BRANCH_FORBIDDEN') {
+      return json(
+        { data: { enrolled: false, code: 'TERMINAL_BRANCH_FORBIDDEN' } },
+        200,
+        auth.responseCookies,
+      );
+    }
+
+    if (detailCode === 'TERMINAL_CREDENTIAL_INVALID') {
       return json(
         { data: { enrolled: false, code: 'TERMINAL_CREDENTIAL_INVALID' } },
         200,
         [...auth.responseCookies, clearedTerminalCookie(isSecureRequest(request))],
       );
     }
+
+    if (upstream.status === 401 || upstream.status === 403 || code === '42501') {
+      return json(
+        { error: 'Employee access to this terminal is forbidden', code: 'TERMINAL_ACCESS_FORBIDDEN' },
+        403,
+        auth.responseCookies,
+      );
+    }
+
     return json(
       { error: 'Terminal status is unavailable', code: 'TERMINAL_STATUS_UNAVAILABLE' },
       502,
