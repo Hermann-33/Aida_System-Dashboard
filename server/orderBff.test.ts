@@ -44,7 +44,10 @@ function employeeProfile(role: 'staff' | 'admin' | 'owner' = 'staff') {
 
 function dashboardRequest(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
-  headers.set('cookie', 'aida_employee_access=employee-access; aida_employee_refresh=refresh-token');
+  headers.set(
+    'cookie',
+    'aida_employee_access=employee-access; aida_employee_refresh=refresh-token; aida_terminal_credential=terminal-secret-abcdefghijklmnopqrstuvwxyz-1234567890',
+  );
   if (init.method && init.method !== 'GET') {
     headers.set('origin', 'https://dashboard.example');
   }
@@ -103,6 +106,7 @@ describe('order BFF', () => {
     const { deps, calls } = depsWith([
       jsonResponse({ id: 'employee-user', email: 'employee@example.test' }),
       jsonResponse([employeeProfile('staff')]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
       jsonResponse([order]),
     ]);
 
@@ -113,7 +117,7 @@ describe('order BFF', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual([order]);
-    const rpc = calls[2];
+    const rpc = calls[3];
     expect(rpc?.url).toContain('/rest/v1/rpc/list_orders');
     expect(new Headers(rpc?.init?.headers).get('Authorization')).toBe('Bearer employee-access');
     expect(JSON.parse(String(rpc?.init?.body))).toEqual({
@@ -130,6 +134,7 @@ describe('order BFF', () => {
     const { deps, calls } = depsWith([
       jsonResponse({ id: 'employee-user', email: 'employee@example.test' }),
       jsonResponse([employeeProfile('staff')]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
       jsonResponse(quote),
     ]);
 
@@ -143,8 +148,8 @@ describe('order BFF', () => {
 
     expect(response.status).toBe(200);
     expect((await response.json()).totalSen).toBe(1540);
-    expect(calls[2]?.url).toContain('/rest/v1/rpc/quote_order');
-    expect(JSON.parse(String(calls[2]?.init?.body))).toEqual({ p_payload: payload });
+    expect(calls[3]?.url).toContain('/rest/v1/rpc/quote_order');
+    expect(JSON.parse(String(calls[3]?.init?.body))).toEqual({ p_payload: payload });
   });
 
   it('places a POS order through caller-JWT place_pos_order without trusting browser totals', async () => {
@@ -158,6 +163,7 @@ describe('order BFF', () => {
     const { deps, calls } = depsWith([
       jsonResponse({ id: 'employee-user', email: 'employee@example.test' }),
       jsonResponse([employeeProfile('staff')]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
       jsonResponse({ ...order, status: 'scheduled', totalSen: 1540 }),
     ]);
 
@@ -171,16 +177,49 @@ describe('order BFF', () => {
 
     expect(response.status).toBe(201);
     expect((await response.json()).totalSen).toBe(1540);
-    const rpc = calls[2];
+    const rpc = calls[3];
     expect(rpc?.url).toContain('/rest/v1/rpc/place_pos_order');
     expect(new Headers(rpc?.init?.headers).get('Authorization')).toBe('Bearer employee-access');
-    expect(JSON.parse(String(rpc?.init?.body))).toEqual({ p_payload: payload });
+    expect(JSON.parse(String(rpc?.init?.body))).toEqual({
+      p_payload: payload,
+      p_terminal_credential: 'terminal-secret-abcdefghijklmnopqrstuvwxyz-1234567890',
+    });
+  });
+
+  it('rejects POS placement when the terminal HttpOnly cookie is absent', async () => {
+    const { deps, calls } = depsWith([
+      jsonResponse({ id: 'employee-user', email: 'employee@example.test' }),
+      jsonResponse([employeeProfile('staff')]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
+    ]);
+
+    const response = await handleEmployeePlaceOrder(
+      new Request('https://dashboard.example/api/v1/orders/place', {
+        method: 'POST',
+        headers: {
+          origin: 'https://dashboard.example',
+          cookie: 'aida_employee_access=employee-access; aida_employee_refresh=refresh-token',
+        },
+        body: JSON.stringify({
+          clientRequestId: 'request-no-terminal',
+          fulfillmentType: 'asap',
+          items: [{ itemId: 'item-1', addOnIds: [], quantity: 1 }],
+        }),
+      }),
+      deps,
+    );
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).code).toBe('TERMINAL_ENROLMENT_REQUIRED');
+    expect(calls).toHaveLength(3);
+    expect(calls.some((call) => call.url.includes('/rpc/place_pos_order'))).toBe(false);
   });
 
   it('maps optimistic status-version conflicts to HTTP 409', async () => {
     const { deps, calls } = depsWith([
       jsonResponse({ id: 'employee-user', email: 'employee@example.test' }),
       jsonResponse([employeeProfile('staff')]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
       jsonResponse({ code: '40001', message: 'order status changed; refresh before retrying' }, 400),
     ]);
 
@@ -194,8 +233,8 @@ describe('order BFF', () => {
 
     expect(response.status).toBe(409);
     expect((await response.json()).code).toBe('ORDER_VERSION_CONFLICT');
-    expect(calls[2]?.url).toContain('/rest/v1/rpc/transition_order_status');
-    expect(JSON.parse(String(calls[2]?.init?.body))).toEqual({
+    expect(calls[3]?.url).toContain('/rest/v1/rpc/transition_order_status');
+    expect(JSON.parse(String(calls[3]?.init?.body))).toEqual({
       p_order_id: 'order-1',
       p_to_status: 'ready',
       p_expected_version: 1,
@@ -223,6 +262,7 @@ describe('order BFF', () => {
     const { deps, calls } = depsWith([
       jsonResponse({ id: 'employee-user', email: 'employee@example.test' }),
       jsonResponse([employeeProfile('staff')]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
     ]);
 
     const response = await handleAdminSaveOrderingPolicy(
@@ -235,7 +275,7 @@ describe('order BFF', () => {
 
     expect(response.status).toBe(403);
     expect((await response.json()).code).toBe('ADMIN_REQUIRED');
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
   });
 
   it('lets admin update schedule policy with the admin caller JWT', async () => {
@@ -249,6 +289,7 @@ describe('order BFF', () => {
     const { deps, calls } = depsWith([
       jsonResponse({ id: 'employee-user', email: 'employee@example.test' }),
       jsonResponse([employeeProfile('admin')]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
       jsonResponse(updated),
     ]);
 
@@ -262,7 +303,7 @@ describe('order BFF', () => {
 
     expect(response.status).toBe(200);
     expect((await response.json()).minimumLeadMinutes).toBe(20);
-    expect(calls[2]?.url).toContain('/rest/v1/rpc/save_ordering_policy');
-    expect(new Headers(calls[2]?.init?.headers).get('Authorization')).toBe('Bearer employee-access');
+    expect(calls[3]?.url).toContain('/rest/v1/rpc/save_ordering_policy');
+    expect(new Headers(calls[3]?.init?.headers).get('Authorization')).toBe('Bearer employee-access');
   });
 });
