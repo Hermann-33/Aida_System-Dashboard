@@ -24,6 +24,8 @@ vi.mock('./orderClient', async (importOriginal) => {
 function fixture(status: OrderSnapshot['status'] = 'confirmed'): OrderSnapshot {
   return {
     id: `order-${status}`, orderNumber: 100021, source: 'customer', customerUserId: 'customer-1', memberId: 'member-1',
+    branchId: 'branch-main', branch: { id: 'branch-main', code: 'BR-MAIN', name: 'Main Café', timezone: 'Asia/Kuala_Lumpur' },
+    salesPointId: null, salesPoint: null, terminalId: null, terminal: null,
     fulfillmentType: 'asap', requestedPickupAt: null, prepareAt: null,
     serverNow: '2026-08-14T00:30:00Z', scheduleState: null, status, statusVersion: 4, currency: 'MYR', pricingVersion: 1,
     subtotalSen: 1450, totalSen: 1450, createdAt: '2026-08-14T00:00:00Z', updatedAt: '2026-08-14T00:00:00Z',
