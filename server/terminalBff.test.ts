@@ -61,10 +61,12 @@ function depsWith(responses: Response[]) {
 
 function request(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
-  headers.set(
-    'cookie',
-    'aida_employee_access=employee-access; aida_employee_refresh=refresh-token',
-  );
+  if (!headers.has('cookie')) {
+    headers.set(
+      'cookie',
+      'aida_employee_access=employee-access; aida_employee_refresh=refresh-token',
+    );
+  }
   if ((init.method ?? 'GET') !== 'GET' && !headers.has('origin')) {
     headers.set('origin', 'https://dashboard.example');
   }
