@@ -6,6 +6,7 @@ import {
   subscribeEmployeeSession,
 } from '../auth/employeeSession';
 import type { ShiftSummary, TerminalLocation } from '../auth/types';
+import { fetchTerminalStatus } from '../auth/terminalCredential';
 import { PosContextBar } from '../components/PosContextBar';
 import { previewShiftRepository } from '../preview/repositories/previewShiftRepository';
 import { previewTerminalRepository } from '../preview/repositories/previewTerminalRepository';
@@ -38,22 +39,36 @@ export function PosShellPage() {
     setError('');
     setPhase('loading');
 
-    if (isUiPreviewMode()) {
-      const status = await previewTerminalRepository.getStatus();
-      if (!status.enrolled) {
-        setError('Terminal not registered — activate from Employee Access (preview).');
-        setPhase('need-location');
-        return;
-      }
-      const loc = status.location;
-      const assigned = session.identity?.assignedBranchIds || [];
-      if (assigned.length && !assigned.includes(loc.branchId) && session.identity?.role === 'staff') {
-        setError('Unauthorised location for this employee');
-        setLocation(null);
-        setPhase('need-location');
-        return;
-      }
-      setLocation(loc);
+    const preview = isUiPreviewMode();
+    const status = preview
+      ? await previewTerminalRepository.getStatus()
+      : await fetchTerminalStatus();
+
+    if (!status.enrolled) {
+      setError(
+        preview
+          ? 'Terminal not registered — activate from Employee Access (preview).'
+          : 'This terminal is not active. Sign out and enter a manager-issued activation code.',
+      );
+      setLocation(null);
+      setShift(null);
+      setPhase('need-location');
+      return;
+    }
+
+    const loc = status.location;
+    const assigned = session.identity?.assignedBranchIds || [];
+    if (assigned.length && !assigned.includes(loc.branchId) && session.identity?.role === 'staff') {
+      setError('Unauthorised location for this employee');
+      setLocation(null);
+      setShift(null);
+      setPhase('need-location');
+      return;
+    }
+
+    setLocation(loc);
+
+    if (preview) {
       const s = previewShiftRepository.getCurrent();
       if (s) {
         setShift(s);
@@ -64,7 +79,9 @@ export function PosShellPage() {
       }
       return;
     }
-    setLocation(null);
+
+    // Shift authority is Phase 2. Live Phase 1 requires terminal/location
+    // authority but deliberately does not manufacture a browser shift.
     setShift(null);
     setPhase('ready');
   }, [session.identity?.assignedBranchIds, session.identity?.role]);
@@ -132,7 +149,8 @@ export function PosShellPage() {
   const identity = session.identity;
   const preview = isUiPreviewMode();
   const workspaceReady = identity && phase === 'ready'
-    && (!preview || Boolean(location && shift?.status === 'open'));
+    && Boolean(location)
+    && (!preview || shift?.status === 'open');
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -170,7 +188,9 @@ export function PosShellPage() {
 
               {phase === 'need-location' && (
                 <p role="alert" className="text-sm font-semibold text-destructive">
-                  Register this terminal from Employee Access before using POS.
+                  {preview
+                    ? 'Register this terminal from Employee Access before using POS.'
+                    : 'This terminal must be activated for your assigned branch before using POS.'}
                 </p>
               )}
 
