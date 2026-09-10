@@ -48,7 +48,9 @@ export function PosShellPage() {
       setError(
         preview
           ? 'Terminal not registered — activate from Employee Access (preview).'
-          : 'This terminal is not active. Sign out and enter a manager-issued activation code.',
+          : status.code === 'TERMINAL_BRANCH_FORBIDDEN'
+            ? 'Your employee account is not authorised for this terminal branch.'
+            : 'This terminal is not active. Sign out and enter a manager-issued activation code.',
       );
       setLocation(null);
       setShift(null);
