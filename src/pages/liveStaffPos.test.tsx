@@ -40,6 +40,34 @@ const terminalLocation = {
   salesPointName: 'Main Counter',
 };
 
+const liveShift = {
+  id: 'shift-live-1',
+  status: 'open',
+  statusVersion: 3,
+  branchId: 'branch-main',
+  salesPointId: 'sales-main',
+  terminalId: 'terminal-main',
+  openedByUserId: 'staff-1',
+  operatorUserId: 'staff-1',
+  canOperate: true,
+  openingFloatSen: 10000,
+  expectedCashSen: 10000,
+  cashInSen: 0,
+  cashOutSen: 0,
+  cashSalesSen: 0,
+  closingActualCashSen: null,
+  cashVarianceSen: null,
+  openedAt: '2026-09-12T00:00:00.000Z',
+  lockedAt: null,
+  lastResumedAt: null,
+  closedAt: null,
+  closeNotes: null,
+  handoverNotes: null,
+  closedByUserId: null,
+  approvedByUserId: null,
+  approvedAt: null,
+};
+
 vi.mock('../preview/uiPreviewMode', () => ({ isUiPreviewMode: () => false }));
 vi.mock('../auth/employeeSession', () => ({
   employeeFetch,
@@ -66,6 +94,10 @@ describe('live staff POS access', () => {
       enrolled: true,
       location: terminalLocation,
     });
+    employeeFetch.mockResolvedValue(new Response(JSON.stringify({ data: liveShift }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
   });
 
   it('routes a successful staff password login to POS only after terminal status is validated', async () => {
@@ -115,19 +147,34 @@ describe('live staff POS access', () => {
     expect(screen.getByText(/one-time code issued by a manager/i)).toBeInTheDocument();
   });
 
-  it('renders live POS only with trusted terminal context and does not invent a shift', async () => {
+  it('renders live POS only after terminal and open shift authority are validated', async () => {
     const { PosShellPage } = await import('./PosShellPage');
     render(<PosShellPage />);
 
     expect(await screen.findByText(/trusted live sale and orders workspace/i)).toBeInTheDocument();
-    expect(screen.getByText(/live · single café/i)).toBeInTheDocument();
+    expect(screen.getByText(/shift open/i)).toBeInTheDocument();
+    expect(screen.getByText(/live authority/i)).toBeInTheDocument();
     expect(fetchTerminalStatus).toHaveBeenCalledTimes(1);
+    expect(employeeFetch).toHaveBeenCalledWith('/api/v1/shifts/current', { method: 'GET' });
 
     const details = screen.getByRole('button', { name: /details/i });
     await userEvent.click(details);
     expect(screen.getByText(/Main Café/)).toBeInTheDocument();
     expect(screen.getByText(/Main Counter/)).toBeInTheDocument();
     expect(screen.getByText(/POS-MAIN-01/)).toBeInTheDocument();
-    expect(screen.getByText(/authority begins in Phase 2/i)).toBeInTheDocument();
+    expect(screen.getByText(/shift-live-1/i)).toBeInTheDocument();
+    expect(screen.getByText(/shift version/i)).toBeInTheDocument();
+  });
+
+  it('blocks the live POS workspace when the terminal has no open shift', async () => {
+    employeeFetch.mockResolvedValueOnce(new Response(JSON.stringify({ data: null }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    const { PosShellPage } = await import('./PosShellPage');
+    render(<PosShellPage />);
+
+    expect(await screen.findByRole('heading', { name: /open shift/i })).toBeInTheDocument();
+    expect(screen.queryByText(/trusted live sale and orders workspace/i)).not.toBeInTheDocument();
   });
 });
