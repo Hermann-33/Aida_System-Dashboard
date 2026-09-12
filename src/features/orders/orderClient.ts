@@ -6,6 +6,8 @@ export const ORDER_POLL_INTERVAL_MS = 2_500;
 
 export type FulfillmentType = 'asap' | 'scheduled';
 export type ScheduleState = 'future' | 'due' | 'overdue';
+export type TenderType = 'unpaid' | 'cash';
+export type PaymentState = 'unpaid' | 'paid';
 export type OrderStatus =
   | 'confirmed'
   | 'scheduled'
@@ -31,6 +33,7 @@ export type OrderIntentPayload = {
 
 export type OrderPlacementPayload = OrderIntentPayload & {
   clientRequestId: string;
+  tenderType?: TenderType;
 };
 
 export type OrderingPolicy = {
@@ -126,6 +129,10 @@ export type OrderSnapshot = {
   salesPoint: OrderSalesPointSnapshot | null;
   terminalId: string | null;
   terminal: OrderTerminalSnapshot | null;
+  shiftId: string | null;
+  tenderType: TenderType;
+  paymentState: PaymentState;
+  paidAt: string | null;
   fulfillmentType: FulfillmentType;
   requestedPickupAt: string | null;
   prepareAt: string | null;
@@ -221,6 +228,10 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
     || typeof value.branch.code !== 'string'
     || typeof value.branch.name !== 'string'
     || typeof value.branch.timezone !== 'string'
+    || !(value.shiftId === null || typeof value.shiftId === 'string')
+    || (value.tenderType !== 'unpaid' && value.tenderType !== 'cash')
+    || (value.paymentState !== 'unpaid' && value.paymentState !== 'paid')
+    || !(value.paidAt === null || isIsoTimestamp(value.paidAt))
     || !isIsoTimestamp(value.serverNow)
     || !(value.prepareAt === null || isIsoTimestamp(value.prepareAt))
     || !(value.scheduleState === null
@@ -257,6 +268,26 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
     || value.terminal !== null
   ) {
     return invalidResponse('Order operational attribution is invalid.');
+  }
+
+  if (value.tenderType === 'cash') {
+    if (value.source !== 'pos'
+      || typeof value.shiftId !== 'string'
+      || value.paymentState !== 'paid'
+      || !isIsoTimestamp(value.paidAt)) {
+      return invalidResponse('Cash payment authority is invalid.');
+    }
+  } else if (value.paymentState !== 'unpaid' || value.paidAt !== null) {
+    return invalidResponse('Unpaid order authority is invalid.');
+  }
+
+  if (value.source === 'customer' && (
+    value.shiftId !== null
+    || value.tenderType !== 'unpaid'
+    || value.paymentState !== 'unpaid'
+    || value.paidAt !== null
+  )) {
+    return invalidResponse('Customer order unexpectedly contains POS payment authority.');
   }
 
   return value as OrderSnapshot;
