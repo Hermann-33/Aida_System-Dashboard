@@ -28,7 +28,6 @@ const lines: CartLine[] = [{
   note: '  less foam  ',
 }];
 
-
 const baseOrderSnapshot = {
   id: 'order-1',
   orderNumber: 100001,
@@ -46,6 +45,10 @@ const baseOrderSnapshot = {
   salesPoint: null,
   terminalId: null,
   terminal: null,
+  shiftId: null,
+  tenderType: 'unpaid' as const,
+  paymentState: 'unpaid' as const,
+  paidAt: null,
   fulfillmentType: 'asap' as const,
   requestedPickupAt: null,
   prepareAt: null,
@@ -144,7 +147,6 @@ describe('order client trust boundary', () => {
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
   });
 
-
   it('accepts trusted POS terminal attribution and rejects partial or customer terminal context', async () => {
     vi.mocked(employeeFetch)
       .mockResolvedValueOnce(new Response(JSON.stringify([{
@@ -180,6 +182,48 @@ describe('order client trust boundary', () => {
       salesPoint: { code: 'SP-MAIN' },
       terminal: { code: 'POS-MAIN-01' },
     }]);
+    await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
+    await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
+  });
+
+  it('accepts server-owned cash payment authority and rejects cash claims without a shift', async () => {
+    const cashOrder = {
+      ...baseOrderSnapshot,
+      source: 'pos' as const,
+      customerUserId: null,
+      memberId: null,
+      salesPointId: 'sales-main',
+      salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' },
+      terminalId: 'terminal-main',
+      terminal: { id: 'terminal-main', code: 'POS-MAIN-01' },
+      shiftId: 'shift-main',
+      tenderType: 'cash' as const,
+      paymentState: 'paid' as const,
+      paidAt: '2026-08-20T12:00:00Z',
+    };
+    vi.mocked(employeeFetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify([cashOrder])))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ ...cashOrder, shiftId: null }])));
+
+    await expect(fetchOrders()).resolves.toMatchObject([{
+      shiftId: 'shift-main', tenderType: 'cash', paymentState: 'paid',
+    }]);
+    await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
+  });
+
+  it('rejects customer attempts to carry shift or payment authority', async () => {
+    vi.mocked(employeeFetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        ...baseOrderSnapshot,
+        shiftId: 'shift-main',
+      }])))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        ...baseOrderSnapshot,
+        tenderType: 'cash',
+        paymentState: 'paid',
+        paidAt: '2026-08-20T12:00:00Z',
+      }])));
+
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
   });
