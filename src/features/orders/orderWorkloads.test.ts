@@ -5,6 +5,9 @@ import { ordersForWorkload, workloadForOrder } from './orderWorkloads';
 function order(status: OrderStatus, scheduleState: ScheduleState | null = null, orderNumber = 100001): OrderSnapshot {
   return {
     id: `order-${orderNumber}`, orderNumber, source: 'customer', customerUserId: 'customer', memberId: 'member',
+    branchId: 'branch-main', branch: { id: 'branch-main', code: 'BR-MAIN', name: 'Main Café', timezone: 'Asia/Kuala_Lumpur' },
+    salesPointId: null, salesPoint: null, terminalId: null, terminal: null,
+    shiftId: null, tenderType: 'unpaid', paymentState: 'unpaid', paidAt: null,
     fulfillmentType: status === 'scheduled' ? 'scheduled' : 'asap',
     requestedPickupAt: status === 'scheduled' ? '2026-08-20T14:00:00Z' : null,
     prepareAt: status === 'scheduled' ? '2026-08-20T13:45:00Z' : null,

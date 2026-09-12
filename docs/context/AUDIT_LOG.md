@@ -1,5 +1,19 @@
 # Audit Log
 
+## 2026-09-10 — TASK-UI-REDESIGN-004 audited customer UI refresh
+
+**Verdict:** READY TO MERGE after final PR-head CI; executable code validation is COMPLETE.
+
+Audited source branch `customer-app-redesign` against current `master`. The source mixed customer presentation work, useful but unfinished account-deletion/referral/loyalty prototypes, and demo-only order/status/test tooling. The final integration on `codex/task-ui-redesign-004-audit-integration` keeps the reviewed AIDA UI/branding refresh, preserves useful future privacy/referral work in a dormant non-deployed form, and removes all demo-only order-progress/test surfaces.
+
+No new canonical Supabase migration is introduced. Account-deletion/referral SQL prototypes live under `supabase/drafts/`; their customer client paths require default-off compile-time flags. Production order status continues to come exclusively from persisted Supabase snapshots plus authorized invalidation/refetch.
+
+UI review retained the AIDA cream/coffee/espresso/rose palette, Playfair/Plus Jakarta typography, rounded/tactile control language and existing commercial trust boundaries. The bright-blue source membership action was replaced with AIDA tokens. Two Item Detail golden baselines produced Linux-vs-Windows raster drift of 3.46% and 3.37%; CI failure evidence was inspected and showed text/icon/border-edge rasterization rather than structural movement. A 3.5% tolerance is scoped only to those two reviewed comparisons; functional viewport assertions and the remaining golden suite remain exact.
+
+Release CI initially failed only at Android APK assembly because preserved `share_plus 13.3.0` brought Kotlin 2.2 metadata into AIDA's older Android toolchain. Rather than widen this UI task into Gradle/AGP/Kotlin modernization, referral sharing was pinned to `share_plus 11.1.0` with compatible lockfile versions. Customer release audit run #87 at code head `7388c1bd40b7da4c0ce56041b8e0e02ece3847db` then passed dependency resolution, zero-issue Flutter analysis, non-golden regressions, golden regressions, release APK assembly and artifact upload.
+
+PR #19 is the integration vehicle and must be squash-merged so mixed source-branch ancestry is not introduced into `master`.
+
 ## 2026-08-21 — TASK-SCHEDULED-OPS-001 scheduled operations closeout
 
 **Verdict:** COMPLETE.
@@ -139,3 +153,29 @@ Customer Supabase sign-up/sign-in/session/logout and trusted profile/member read
 ## Foundation/governance tasks
 
 Earlier workflow/database tasks established the dual-repository/single-Supabase topology, canonical migration ownership in the customer repository, mirrored governance/documentation requirements, identity/member schema with forced RLS, accepted ADRs and the full-stack completion discipline used by this closeout.
+
+
+## 2026-09-10 — TASK-OPS-001 branch/location authority
+
+**Verdict:** PARTIAL.
+
+Live Supabase migrations `20260910014434 create_branch_location_authority` and `20260910014457 index_employee_branch_assignment_actor` established trusted branch identity and employee operational scope.
+
+Live state after deployment:
+
+```text
+branches                  1
+active default branches   1
+default code              BR-MAIN
+orders without branch     0 / 25
+employee assignments      3
+staff without assignment  0
+```
+
+The migration added `branches`, `employee_branch_assignments`, immutable non-null `orders.branch_id`, branch-scoped ordinary-staff order RLS/RPC authorization, default-branch backfill/compatibility, Admin/Owner branch/assignment RPCs and a role-change trigger that seeds new staff to the default branch when no assignment exists.
+
+The first post-deployment performance-advisor pass found one task-created unindexed FK on `employee_branch_assignments.assigned_by`; the second migration fixed it. Security advisor state remains one pre-existing leaked-password-protection WARN only.
+
+Dashboard task-branch work replaced hardcoded empty employee branch claims with caller-JWT-backed assignment reads and added same-origin BFF/API routes for public branches, Admin branches, branch save, Admin employee directory and employee-branch assignment mutation. Ordinary staff with no trusted assignment fail closed.
+
+Canonical SQL regression `supabase/tests/branch_authority_integration.sql` and Dashboard BFF unit coverage are committed. The connected SQL inspection role is read-only, so the transactional SQL regression was not executed in this session. Dashboard lint/typecheck/Vitest/build also remain to run before COMPLETE.

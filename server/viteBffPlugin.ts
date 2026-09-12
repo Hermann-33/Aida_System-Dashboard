@@ -22,6 +22,33 @@ import {
   handleEmployeeTransitionOrder,
   handleOrderingPolicy,
 } from './orderBff.js';
+import {
+  handleAdminBranches,
+  handleAdminEmployees,
+  handleAdminSaveBranch,
+  handleAdminSaveEmployeeBranches,
+  handlePublicBranches,
+} from './locationBff.js';
+import {
+  handleAdminIssueTerminalCode,
+  handleAdminOperationalLocations,
+  handleAdminRevokeTerminal,
+  handleAdminSaveSalesPoint,
+  handleAdminSaveTerminal,
+  handleTerminalClearCredential,
+  handleTerminalEnrol,
+  handleTerminalStatus,
+} from './terminalBff.js';
+import {
+  handleAdminShifts,
+  handleCashMovement,
+  handleCloseShift,
+  handleCurrentShift,
+  handleLockShift,
+  handleOpenShift,
+  handleResumeShift,
+  handleShiftReconciliation,
+} from './shiftBff.js';
 
 type Handler = (
   request: Request,
@@ -46,6 +73,27 @@ const handlers = new Map<string, Handler>([
   ['/api/v1/orders/place', handleEmployeePlaceOrder],
   ['/api/v1/orders/status', handleEmployeeTransitionOrder],
   ['/api/v1/admin/orders/policy', handleAdminSaveOrderingPolicy],
+  ['/api/v1/branches', handlePublicBranches],
+  ['/api/v1/admin/branches', handleAdminBranches],
+  ['/api/v1/admin/branches/save', handleAdminSaveBranch],
+  ['/api/v1/admin/employees', handleAdminEmployees],
+  ['/api/v1/admin/employees/branches', handleAdminSaveEmployeeBranches],
+  ['/api/v1/terminals/status', handleTerminalStatus],
+  ['/api/v1/terminals/enrol', handleTerminalEnrol],
+  ['/api/v1/terminals/clear-credential', handleTerminalClearCredential],
+  ['/api/v1/shifts/current', handleCurrentShift],
+  ['/api/v1/shifts/open', handleOpenShift],
+  ['/api/v1/shifts/lock', handleLockShift],
+  ['/api/v1/shifts/resume', handleResumeShift],
+  ['/api/v1/shifts/cash-movement', handleCashMovement],
+  ['/api/v1/shifts/reconciliation', handleShiftReconciliation],
+  ['/api/v1/shifts/close', handleCloseShift],
+  ['/api/v1/admin/shifts', handleAdminShifts],
+  ['/api/v1/admin/locations', handleAdminOperationalLocations],
+  ['/api/v1/admin/sales-points/save', handleAdminSaveSalesPoint],
+  ['/api/v1/admin/terminals/save', handleAdminSaveTerminal],
+  ['/api/v1/admin/terminals/enrolment-code', handleAdminIssueTerminalCode],
+  ['/api/v1/admin/terminals/revoke', handleAdminRevokeTerminal],
 ]);
 
 function requestUrl(request: IncomingMessage): string {
@@ -117,9 +165,9 @@ function mount(server: ConnectServer, env: Record<string, string | undefined>) {
 }
 
 /**
- * Serves employee/admin, catalogue, and ordering BFF handlers during Vite
- * dev/preview. Production serverless deployments use the same root `/api`
- * handlers.
+ * Serves employee/admin, catalogue, ordering, terminal, and shift BFF handlers
+ * during Vite dev/preview. Production serverless deployments use the same root
+ * `/api` handlers.
  */
 export function aidaBffPlugin(env: Record<string, string | undefined>): Plugin {
   return {
