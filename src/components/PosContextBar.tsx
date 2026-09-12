@@ -56,12 +56,14 @@ export function PosContextBar({ employee, location, shift, connection = 'online'
 
       <span aria-hidden="true" className="h-6 w-px bg-white/15" />
 
+      <span className={`status-pill ${SHIFT_CLASS[shift?.status ?? ''] ?? 'status-pill--info'}`}>
+        Shift {shift?.status || 'none'}
+      </span>
       {operationalMode === 'preview' ? (
-        <>
-          <span className={`status-pill ${SHIFT_CLASS[shift?.status ?? ''] ?? 'status-pill--info'}`}>Shift {shift?.status || 'none'}</span>
-          <span className={`status-pill ${CONNECTION_CLASS[connection]}`}>{CONNECTION_LABEL[connection]}</span>
-        </>
-      ) : <span className="status-pill status-pill--ok">Live · single café</span>}
+        <span className={`status-pill ${CONNECTION_CLASS[connection]}`}>{CONNECTION_LABEL[connection]}</span>
+      ) : (
+        <span className="status-pill status-pill--ok">Live authority</span>
+      )}
 
       <button
         type="button"
@@ -86,11 +88,9 @@ export function PosContextBar({ employee, location, shift, connection = 'online'
               <strong className="font-bold text-[var(--aida-gold)]">Access</strong> Global manager
             </span>
           )}
-          {operationalMode === 'preview' ? <>
-            <span><strong className="font-bold text-[var(--aida-gold)]">Branch</strong>{' '}{location?.branchName || location?.branchCode || '—'}</span>
-            <span><strong className="font-bold text-[var(--aida-gold)]">Sales point</strong>{' '}{location?.salesPointName || location?.salesPointCode || '—'}</span>
-            <span><strong className="font-bold text-[var(--aida-gold)]">Terminal</strong> {location?.terminalCode || '—'}</span>
-          </> : <span><strong className="font-bold text-[var(--aida-gold)]">Scope</strong> Global staff order queue; terminal and shift authority deferred</span>}
+          <span><strong className="font-bold text-[var(--aida-gold)]">Branch</strong>{' '}{location?.branchName || location?.branchCode || '—'}</span>
+          <span><strong className="font-bold text-[var(--aida-gold)]">Sales point</strong>{' '}{location?.salesPointName || location?.salesPointCode || '—'}</span>
+          <span><strong className="font-bold text-[var(--aida-gold)]">Terminal</strong> {location?.terminalCode || '—'}</span>
           {shiftStarted && (
             <span>
               <strong className="font-bold text-[var(--aida-gold)]">Shift started</strong> {shiftStarted}
@@ -99,6 +99,11 @@ export function PosContextBar({ employee, location, shift, connection = 'online'
           {shift?.id && (
             <span>
               <strong className="font-bold text-[var(--aida-gold)]">Shift ID</strong> {shift.id}
+            </span>
+          )}
+          {operationalMode === 'live' && shift?.statusVersion && (
+            <span>
+              <strong className="font-bold text-[var(--aida-gold)]">Shift version</strong> {shift.statusVersion}
             </span>
           )}
         </div>
