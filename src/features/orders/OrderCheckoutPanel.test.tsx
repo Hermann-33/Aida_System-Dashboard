@@ -36,6 +36,7 @@ const order = {
   branchId: 'branch-main', branch: { id: 'branch-main', code: 'BR-MAIN', name: 'Main Café', timezone: 'Asia/Kuala_Lumpur' },
   salesPointId: 'sales-main', salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' },
   terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' },
+  shiftId: 'shift-main', tenderType: 'cash', paymentState: 'paid', paidAt: '2026-08-14T00:00:00Z',
   fulfillmentType: 'asap', requestedPickupAt: null, prepareAt: null,
   serverNow: '2026-08-14T00:00:00Z', scheduleState: null, status: 'confirmed', statusVersion: 1,
   currency: 'MYR', pricingVersion: 2, subtotalSen: 1450, totalSen: 1450,
