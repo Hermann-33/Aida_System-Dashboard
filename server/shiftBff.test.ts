@@ -140,16 +140,17 @@ describe('shift BFF', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ data: shift });
+    const body = await response.json();
+    expect(body).toEqual({ data: shift });
+    expect(JSON.stringify(body)).not.toContain('terminal-secret');
     expect(calls[3]?.url).toContain('/rest/v1/rpc/open_shift');
     expect(JSON.parse(String(calls[3]?.init?.body))).toEqual({
       p_terminal_credential: 'terminal-secret-abcdefghijklmnopqrstuvwxyz-1234567890',
       p_opening_float_sen: 10000,
     });
-    expect(JSON.stringify(await response.clone().json().catch(() => null))).not.toContain('terminal-secret');
   });
 
-  it('records cash movement through server authority and maps shift conflicts', async () => {
+  it('records cash movement through server authority', async () => {
     const movement = {
       movement: { id: 'movement-1', shiftId: shift.id, type: 'cash_out', amountSen: 500, reason: 'Safe drop' },
       shift: { ...shift, cashOutSen: 500, expectedCashSen: 9500 },
