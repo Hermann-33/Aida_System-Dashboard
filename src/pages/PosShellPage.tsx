@@ -12,6 +12,7 @@ import { previewShiftRepository } from '../preview/repositories/previewShiftRepo
 import { previewTerminalRepository } from '../preview/repositories/previewTerminalRepository';
 import { isUiPreviewMode } from '../preview/uiPreviewMode';
 import { CounterWorkspace } from '../features/pos/CounterWorkspace';
+import { LiveShiftControls } from '../features/shifts/LiveShiftControls';
 import {
   closeTrustedShift,
   fetchCurrentShift,
@@ -211,6 +212,15 @@ export function PosShellPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <PosContextBar employee={identity} location={location} shift={shift} connection={connectionState} operationalMode={preview ? 'preview' : 'live'} />
+      {!preview && identity && location && phase === 'ready' && shift?.status === 'open' && (
+        <LiveShiftControls
+          shift={shift}
+          busy={busy}
+          onShiftChange={setShift}
+          onLock={() => void lockShift()}
+          onCloseRequest={() => setPhase('closing')}
+        />
+      )}
       {workspaceReady ? (
         <CounterWorkspace
           employee={identity}
