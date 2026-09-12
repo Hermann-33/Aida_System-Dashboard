@@ -1,3 +1,3 @@
-import { handleAdminShifts } from '../../server/shiftBff.js';
+import { handleAdminShifts } from '../../../server/shiftBff.js';
 
 export default { fetch: handleAdminShifts };
