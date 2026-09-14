@@ -31,18 +31,33 @@ function compactAuthority(label: string, id: string): string {
 }
 
 function liveRow(shift: ShiftSummary): ShiftRow {
+  // fetchAdminShifts returns parseShiftSnapshot-validated live rows. ShiftSummary
+  // keeps these fields optional only so preview fixtures can use the same shape.
+  const operatorUserId = shift.operatorUserId ?? shift.staffUserId;
+  const openingFloatSen = shift.openingFloatSen ?? Math.round(shift.openingFloat * 100);
+  const cashSalesSen = shift.cashSalesSen ?? 0;
+  const expectedSen = shift.expectedCashSen ?? (
+    shift.closingExpectedCash === null ? null : Math.round(shift.closingExpectedCash * 100)
+  );
+  const actualSen = shift.closingActualCashSen ?? (
+    shift.closingActualCash === null ? null : Math.round(shift.closingActualCash * 100)
+  );
+  const varianceSen = shift.cashVarianceSen ?? (
+    shift.cashVariance === null ? null : Math.round(shift.cashVariance * 100)
+  );
+
   return {
     id: shift.id,
-    staff: compactAuthority('User', shift.operatorUserId),
+    staff: compactAuthority('User', operatorUserId),
     terminal: compactAuthority('Terminal', shift.terminalId),
     salesPoint: compactAuthority('Sales point', shift.salesPointId),
     status: shift.status,
     openedAt: shift.openedAt ? formatKlDateTime(shift.openedAt) : '—',
-    openingFloatSen: shift.openingFloatSen,
-    cashSalesSen: shift.cashSalesSen,
-    expectedSen: shift.expectedCashSen,
-    actualSen: shift.closingActualCashSen,
-    varianceSen: shift.cashVarianceSen,
+    openingFloatSen,
+    cashSalesSen,
+    expectedSen,
+    actualSen,
+    varianceSen,
   };
 }
 
@@ -149,9 +164,7 @@ export function AdminShiftsPage() {
                     <td>{row.terminal}</td>
                     <td>{row.salesPoint}</td>
                     <td>
-                      <span
-                        className={`status-pill status-pill--${row.status === 'open' ? 'ok' : row.status === 'locked' ? 'warn' : 'info'}`}
-                      >
+                      <span className={`status-pill status-pill--${row.status === 'open' ? 'ok' : row.status === 'locked' ? 'warn' : 'info'}`}>
                         {row.status}
                       </span>
                     </td>
@@ -163,9 +176,7 @@ export function AdminShiftsPage() {
                         <span className={row.varianceSen < 0 ? 'variance-neg' : 'variance-pos'}>
                           {formatRmFromSen(row.varianceSen)}
                         </span>
-                      ) : (
-                        '—'
-                      )}
+                      ) : '—'}
                     </td>
                   </tr>
                 ))}
@@ -215,9 +226,7 @@ export function AdminShiftsPage() {
                         <span className={row.varianceSen < 0 ? 'variance-neg' : 'variance-pos'}>
                           {formatRmFromSen(row.varianceSen)}
                         </span>
-                      ) : (
-                        '—'
-                      )}
+                      ) : '—'}
                     </td>
                   </tr>
                 ))}
