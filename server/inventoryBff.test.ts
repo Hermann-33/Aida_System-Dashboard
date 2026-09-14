@@ -82,7 +82,7 @@ describe('inventory BFF', () => {
       headers: { cookie: 'aida_employee_access=staff-access; aida_employee_refresh=staff-refresh' },
     }), deps);
     expect(response.status).toBe(403);
-    expect((await response.json()).code).toBe('ADMIN_REQUIRED');
+    expect((await response.json()).code).toBe('EMPLOYEE_ACCESS_FORBIDDEN');
     expect(calls).toHaveLength(3);
   });
 
