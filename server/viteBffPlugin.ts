@@ -55,6 +55,13 @@ import {
   handleResumeShift,
   handleShiftReconciliation,
 } from './shiftBff.js';
+import {
+  handleAdminAdjustMemberLoyalty,
+  handleAdminLoyaltyState,
+  handleAdminMemberLoyalty,
+  handleAdminSaveLoyaltyProgram,
+  handleAdminSaveLoyaltyReward,
+} from './loyaltyBff.js';
 
 type Handler = (
   request: Request,
@@ -104,6 +111,11 @@ const handlers = new Map<string, Handler>([
   ['/api/v1/admin/terminals/save', handleAdminSaveTerminal],
   ['/api/v1/admin/terminals/enrolment-code', handleAdminIssueTerminalCode],
   ['/api/v1/admin/terminals/revoke', handleAdminRevokeTerminal],
+  ['/api/v1/admin/loyalty', handleAdminLoyaltyState],
+  ['/api/v1/admin/loyalty/program', handleAdminSaveLoyaltyProgram],
+  ['/api/v1/admin/loyalty/reward', handleAdminSaveLoyaltyReward],
+  ['/api/v1/admin/loyalty/member', handleAdminMemberLoyalty],
+  ['/api/v1/admin/loyalty/adjust', handleAdminAdjustMemberLoyalty],
 ]);
 
 function requestUrl(request: IncomingMessage): string {
@@ -175,9 +187,9 @@ function mount(server: ConnectServer, env: Record<string, string | undefined>) {
 }
 
 /**
- * Serves employee/admin, catalogue, ordering, terminal, shift, and pickup BFF
- * handlers during Vite dev/preview. Production serverless deployments use the
- * same root `/api` handlers.
+ * Serves employee/admin, catalogue, ordering, terminal, shift, pickup, inventory,
+ * and loyalty BFF handlers during Vite dev/preview. Production serverless
+ * deployments use the same root `/api` handlers.
  */
 export function aidaBffPlugin(env: Record<string, string | undefined>): Plugin {
   return {
