@@ -14,6 +14,7 @@ import { AdminSalesPerformancePage } from './features/admin/AdminSalesPerformanc
 import { AdminTransactionsPage } from './features/admin/AdminTransactionsPage';
 import { AdminMembersLoyaltyReportPage } from './features/admin/AdminMembersLoyaltyReportPage';
 import { AdminLocationsPage } from './features/admin/AdminLocationsPage';
+import { AdminPickupSchedulingPage } from './features/admin/AdminPickupSchedulingPage';
 import { AdminTerminalsPage } from './features/admin/AdminTerminalsPage';
 import { AdminShiftsPage } from './features/admin/AdminShiftsPage';
 import { AdminEmployeesPage } from './features/admin/AdminEmployeesPage';
@@ -74,6 +75,7 @@ export default function App() {
               <Route path="/admin/reports/transactions" element={<AdminTransactionsPage />} />
               <Route path="/admin/reports/members" element={<AdminMembersLoyaltyReportPage />} />
               <Route path="/admin/operations/branches" element={<AdminLocationsPage />} />
+              <Route path="/admin/operations/pickup" element={<AdminPickupSchedulingPage />} />
               <Route path="/admin/operations/terminals" element={<AdminTerminalsPage />} />
               <Route path="/admin/operations/shifts" element={<AdminShiftsPage />} />
               <Route path="/admin/operations/employees" element={<AdminEmployeesPage />} />

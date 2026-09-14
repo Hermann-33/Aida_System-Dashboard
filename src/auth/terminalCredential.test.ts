@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { fetchTerminalStatus, clearTerminalEnrolment } from './terminalCredential';
+import { fetchTerminalStatus, enrolTerminal, clearTerminalEnrolment } from './terminalCredential';
 
 describe('terminal cookie client (Phase 2B Closure)', () => {
   afterEach(() => {
@@ -60,6 +60,45 @@ describe('terminal cookie client (Phase 2B Closure)', () => {
     );
     const status = await fetchTerminalStatus();
     expect(status).toEqual({ enrolled: false, code: 'TERMINAL_UNENROLLED' });
+  });
+
+  it('enrolTerminal exchanges only the manager-issued code and receives location, not a terminal secret', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          data: {
+            enrolled: true,
+            location: {
+              terminalId: 't1',
+              terminalCode: 'POS-MAIN-01',
+              branchId: 'b1',
+              branchCode: 'BR-MAIN',
+              branchName: 'Main Café',
+              salesPointId: 's1',
+              salesPointCode: 'SP-MAIN',
+              salesPointName: 'Main Counter',
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await enrolTerminal(' aida-abc123def456 ');
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.location.terminalCode).toBe('POS-MAIN-01');
+    }
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/terminals/enrol',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({ code: 'AIDA-ABC123DEF456' }),
+      }),
+    );
   });
 
   it('clearTerminalEnrolment posts with credentials include', async () => {
