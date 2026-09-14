@@ -28,6 +28,25 @@ const lines: CartLine[] = [{
   note: '  less foam  ',
 }];
 
+const validSnapshotLine = {
+  id: 'line-1',
+  lineNumber: 1,
+  itemId: '11111111-1111-4111-8111-111111111111',
+  sku: 'CF-LAT',
+  name: 'Latte',
+  prepRoute: 'bar' as const,
+  basePriceSen: 1450,
+  variant: null,
+  addOns: [],
+  addOnTotalSen: 0,
+  options: [],
+  optionTotalSen: 0,
+  unitPriceSen: 1450,
+  quantity: 1,
+  lineTotalSen: 1450,
+  note: null,
+};
+
 const baseOrderSnapshot = {
   id: 'order-1',
   orderNumber: 100001,
@@ -67,7 +86,7 @@ const baseOrderSnapshot = {
   readyAt: null,
   completedAt: null,
   cancelledAt: null,
-  lines: [],
+  lines: [validSnapshotLine],
 };
 
 describe('order client trust boundary', () => {
@@ -147,7 +166,7 @@ describe('order client trust boundary', () => {
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
   });
 
-  it('accepts trusted POS terminal attribution and rejects partial or customer terminal context', async () => {
+  it('accepts trusted POS terminal/shift attribution and rejects partial or customer terminal context', async () => {
     vi.mocked(employeeFetch)
       .mockResolvedValueOnce(new Response(JSON.stringify([{
         ...baseOrderSnapshot,
@@ -158,6 +177,7 @@ describe('order client trust boundary', () => {
         salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' },
         terminalId: 'terminal-main',
         terminal: { id: 'terminal-main', code: 'POS-MAIN-01' },
+        shiftId: 'shift-main',
       }])))
       .mockResolvedValueOnce(new Response(JSON.stringify([{
         ...baseOrderSnapshot,
@@ -168,6 +188,7 @@ describe('order client trust boundary', () => {
         salesPoint: null,
         terminalId: 'terminal-main',
         terminal: { id: 'terminal-main', code: 'POS-MAIN-01' },
+        shiftId: 'shift-main',
       }])))
       .mockResolvedValueOnce(new Response(JSON.stringify([{
         ...baseOrderSnapshot,
@@ -179,6 +200,7 @@ describe('order client trust boundary', () => {
       }])));
 
     await expect(fetchOrders()).resolves.toMatchObject([{
+      shiftId: 'shift-main',
       salesPoint: { code: 'SP-MAIN' },
       terminal: { code: 'POS-MAIN-01' },
     }]);
@@ -211,6 +233,26 @@ describe('order client trust boundary', () => {
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
   });
 
+  it('accepts POS member identity for loyalty but rejects POS customer identity', async () => {
+    const posOrder = {
+      ...baseOrderSnapshot,
+      source: 'pos' as const,
+      customerUserId: null,
+      memberId: 'member-loyalty',
+      salesPointId: 'sales-main',
+      salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' },
+      terminalId: 'terminal-main',
+      terminal: { id: 'terminal-main', code: 'POS-MAIN-01' },
+      shiftId: 'shift-main',
+    };
+    vi.mocked(employeeFetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify([posOrder])))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ ...posOrder, customerUserId: 'customer-forbidden' }])));
+
+    await expect(fetchOrders()).resolves.toMatchObject([{ memberId: 'member-loyalty' }]);
+    await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
+  });
+
   it('rejects customer attempts to carry shift or payment authority', async () => {
     vi.mocked(employeeFetch)
       .mockResolvedValueOnce(new Response(JSON.stringify([{
@@ -224,6 +266,20 @@ describe('order client trust boundary', () => {
         paidAt: '2026-08-20T12:00:00Z',
       }])));
 
+    await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
+    await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
+  });
+
+  it('rejects malformed monetary or line snapshots', async () => {
+    vi.mocked(employeeFetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        ...baseOrderSnapshot,
+        totalSen: 1450.5,
+      }])))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        ...baseOrderSnapshot,
+        lines: [{ ...validSnapshotLine, lineTotalSen: 1400 }],
+      }])));
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
   });
