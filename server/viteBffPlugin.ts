@@ -30,6 +30,12 @@ import {
   handlePublicBranches,
 } from './locationBff.js';
 import {
+  handleAdminDeletePickupException,
+  handleAdminPickupConfiguration,
+  handleAdminSavePickupConfiguration,
+  handleAdminSavePickupException,
+} from './pickupBff.js';
+import {
   handleAdminIssueTerminalCode,
   handleAdminOperationalLocations,
   handleAdminRevokeTerminal,
@@ -76,6 +82,10 @@ const handlers = new Map<string, Handler>([
   ['/api/v1/branches', handlePublicBranches],
   ['/api/v1/admin/branches', handleAdminBranches],
   ['/api/v1/admin/branches/save', handleAdminSaveBranch],
+  ['/api/v1/admin/branches/pickup', handleAdminPickupConfiguration],
+  ['/api/v1/admin/branches/pickup-save', handleAdminSavePickupConfiguration],
+  ['/api/v1/admin/branches/pickup-exception', handleAdminSavePickupException],
+  ['/api/v1/admin/branches/pickup-exception-delete', handleAdminDeletePickupException],
   ['/api/v1/admin/employees', handleAdminEmployees],
   ['/api/v1/admin/employees/branches', handleAdminSaveEmployeeBranches],
   ['/api/v1/terminals/status', handleTerminalStatus],
@@ -165,9 +175,9 @@ function mount(server: ConnectServer, env: Record<string, string | undefined>) {
 }
 
 /**
- * Serves employee/admin, catalogue, ordering, terminal, and shift BFF handlers
- * during Vite dev/preview. Production serverless deployments use the same root
- * `/api` handlers.
+ * Serves employee/admin, catalogue, ordering, terminal, shift, and pickup BFF
+ * handlers during Vite dev/preview. Production serverless deployments use the
+ * same root `/api` handlers.
  */
 export function aidaBffPlugin(env: Record<string, string | undefined>): Plugin {
   return {
