@@ -72,18 +72,17 @@ describe('inventory BFF', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('denies ordinary staff inventory administration', async () => {
+  it('denies ordinary staff inventory administration at the employee-session boundary', async () => {
     const { deps, calls } = depsWith([
       jsonResponse({ id: 'staff-user', email: 'staff@example.test' }),
       jsonResponse([staffProfile]),
-      jsonResponse([{ branch_id: 'branch-main' }]),
     ]);
     const response = await handleAdminInventoryState(request('/api/v1/admin/inventory?branchId=branch-main', {
       headers: { cookie: 'aida_employee_access=staff-access; aida_employee_refresh=staff-refresh' },
     }), deps);
     expect(response.status).toBe(403);
     expect((await response.json()).code).toBe('EMPLOYEE_ACCESS_FORBIDDEN');
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(2);
   });
 
   it('forwards inventory-item intent only to the trusted RPC', async () => {
