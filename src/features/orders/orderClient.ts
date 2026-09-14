@@ -194,12 +194,83 @@ function isIsoTimestamp(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && Number.isFinite(Date.parse(value));
 }
 
+function isNullableTimestamp(value: unknown): value is string | null {
+  return value === null || isIsoTimestamp(value);
+}
+
+function isSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value);
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return isSafeInteger(value) && value >= 0;
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return isSafeInteger(value) && value > 0;
+}
+
 function isNonNegativeNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === 'string';
+}
+
 function invalidResponse(message: string): never {
   throw new OrderClientError(message, 502, 'ORDER_RESPONSE_INVALID');
+}
+
+function validAddOn(value: unknown): value is OrderAddOnSnapshot {
+  return isRecord(value)
+    && typeof value.itemId === 'string'
+    && typeof value.sku === 'string'
+    && typeof value.name === 'string'
+    && isNonNegativeInteger(value.priceSen);
+}
+
+function validOption(value: unknown): value is OrderOptionSnapshot {
+  return isRecord(value)
+    && typeof value.groupId === 'string'
+    && typeof value.groupCode === 'string'
+    && typeof value.groupName === 'string'
+    && typeof value.optionValueId === 'string'
+    && typeof value.optionCode === 'string'
+    && typeof value.optionLabel === 'string'
+    && isSafeInteger(value.priceDeltaSen);
+}
+
+function validVariant(value: unknown): boolean {
+  return value === null || (
+    isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.code === 'string'
+    && typeof value.label === 'string'
+    && isSafeInteger(value.priceDeltaSen)
+  );
+}
+
+function validOrderLine(value: unknown): value is OrderLineSnapshot {
+  return isRecord(value)
+    && (value.id === undefined || typeof value.id === 'string')
+    && isPositiveInteger(value.lineNumber)
+    && typeof value.itemId === 'string'
+    && typeof value.sku === 'string'
+    && typeof value.name === 'string'
+    && (value.prepRoute === 'bar' || value.prepRoute === 'kitchen')
+    && isNonNegativeInteger(value.basePriceSen)
+    && validVariant(value.variant)
+    && Array.isArray(value.addOns)
+    && value.addOns.every(validAddOn)
+    && isNonNegativeInteger(value.addOnTotalSen)
+    && Array.isArray(value.options)
+    && value.options.every(validOption)
+    && isSafeInteger(value.optionTotalSen)
+    && isNonNegativeInteger(value.unitPriceSen)
+    && isPositiveInteger(value.quantity)
+    && isNonNegativeInteger(value.lineTotalSen)
+    && isNullableString(value.note);
 }
 
 export function parseOrderingPolicy(value: unknown): OrderingPolicy {
@@ -220,8 +291,11 @@ export function parseOrderingPolicy(value: unknown): OrderingPolicy {
 export function parseOrderSnapshot(value: unknown): OrderSnapshot {
   if (!isRecord(value)
     || typeof value.id !== 'string'
-    || typeof value.orderNumber !== 'number'
+    || value.id.length === 0
+    || !isPositiveInteger(value.orderNumber)
     || (value.source !== 'customer' && value.source !== 'pos')
+    || !isNullableString(value.customerUserId)
+    || !isNullableString(value.memberId)
     || typeof value.branchId !== 'string'
     || !isRecord(value.branch)
     || value.branch.id !== value.branchId
@@ -231,48 +305,82 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
     || !(value.shiftId === null || typeof value.shiftId === 'string')
     || (value.tenderType !== 'unpaid' && value.tenderType !== 'cash')
     || (value.paymentState !== 'unpaid' && value.paymentState !== 'paid')
-    || !(value.paidAt === null || isIsoTimestamp(value.paidAt))
+    || !isNullableTimestamp(value.paidAt)
+    || (value.fulfillmentType !== 'asap' && value.fulfillmentType !== 'scheduled')
+    || !isNullableTimestamp(value.requestedPickupAt)
     || !isIsoTimestamp(value.serverNow)
-    || !(value.prepareAt === null || isIsoTimestamp(value.prepareAt))
+    || !isNullableTimestamp(value.prepareAt)
     || !(value.scheduleState === null
       || value.scheduleState === 'future'
       || value.scheduleState === 'due'
-      || value.scheduleState === 'overdue')) {
+      || value.scheduleState === 'overdue')
+    || !(['confirmed', 'scheduled', 'preparing', 'ready', 'completed', 'cancelled'] as const).includes(value.status as OrderStatus)
+    || !isPositiveInteger(value.statusVersion)
+    || value.currency !== 'MYR'
+    || !isPositiveInteger(value.pricingVersion)
+    || !isNonNegativeInteger(value.subtotalSen)
+    || !isNonNegativeInteger(value.totalSen)
+    || value.totalSen > value.subtotalSen
+    || !isIsoTimestamp(value.createdAt)
+    || !isIsoTimestamp(value.updatedAt)
+    || !isIsoTimestamp(value.statusUpdatedAt)
+    || !isNullableTimestamp(value.preparingAt)
+    || !isNullableTimestamp(value.readyAt)
+    || !isNullableTimestamp(value.completedAt)
+    || !isNullableTimestamp(value.cancelledAt)
+    || !Array.isArray(value.lines)
+    || value.lines.length === 0
+    || !value.lines.every(validOrderLine)) {
     return invalidResponse('Order response is invalid.');
+  }
+
+  const lineSubtotal = value.lines.reduce((sum, line) => sum + line.lineTotalSen, 0);
+  if (!Number.isSafeInteger(lineSubtotal) || lineSubtotal !== value.subtotalSen) {
+    return invalidResponse('Order commercial snapshot is inconsistent.');
+  }
+
+  if (value.fulfillmentType === 'scheduled') {
+    if (!isIsoTimestamp(value.requestedPickupAt)) {
+      return invalidResponse('Scheduled order pickup authority is invalid.');
+    }
+  } else if (value.requestedPickupAt !== null || value.scheduleState !== null) {
+    return invalidResponse('ASAP order unexpectedly contains scheduled pickup authority.');
   }
 
   const salesPoint = isRecord(value.salesPoint) ? value.salesPoint : null;
   const terminal = isRecord(value.terminal) ? value.terminal : null;
   const hasSalesPointId = typeof value.salesPointId === 'string';
   const hasTerminalId = typeof value.terminalId === 'string';
-  const hasOperationalContext =
-    hasSalesPointId || hasTerminalId || salesPoint !== null || terminal !== null;
+  const hasCompleteOperationalContext = hasSalesPointId
+    && hasTerminalId
+    && salesPoint !== null
+    && terminal !== null
+    && salesPoint.id === value.salesPointId
+    && typeof salesPoint.code === 'string'
+    && typeof salesPoint.name === 'string'
+    && terminal.id === value.terminalId
+    && typeof terminal.code === 'string';
 
-  if (hasOperationalContext) {
-    if (!hasSalesPointId
-      || !hasTerminalId
-      || salesPoint === null
-      || terminal === null
-      || salesPoint.id !== value.salesPointId
-      || typeof salesPoint.code !== 'string'
-      || typeof salesPoint.name !== 'string'
-      || terminal.id !== value.terminalId
-      || typeof terminal.code !== 'string'
-      || value.source !== 'pos') {
-      return invalidResponse('Order operational attribution is invalid.');
+  if (value.source === 'pos') {
+    if (!hasCompleteOperationalContext
+      || typeof value.shiftId !== 'string'
+      || value.customerUserId !== null) {
+      return invalidResponse('POS operational attribution is invalid.');
     }
+    // A POS memberId is legitimate Phase 6 loyalty context. The customer Auth
+    // identity remains forbidden on POS snapshots.
   } else if (
     value.salesPointId !== null
     || value.terminalId !== null
     || value.salesPoint !== null
     || value.terminal !== null
+    || value.shiftId !== null
   ) {
-    return invalidResponse('Order operational attribution is invalid.');
+    return invalidResponse('Customer order unexpectedly contains POS operational authority.');
   }
 
   if (value.tenderType === 'cash') {
     if (value.source !== 'pos'
-      || typeof value.shiftId !== 'string'
       || value.paymentState !== 'paid'
       || !isIsoTimestamp(value.paidAt)) {
       return invalidResponse('Cash payment authority is invalid.');
@@ -282,8 +390,7 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
   }
 
   if (value.source === 'customer' && (
-    value.shiftId !== null
-    || value.tenderType !== 'unpaid'
+    value.tenderType !== 'unpaid'
     || value.paymentState !== 'unpaid'
     || value.paidAt !== null
   )) {
