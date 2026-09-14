@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { AdminPageShell } from './AdminPageShell';
 import { fetchOperationalLocations, type OperationalBranch } from '../locations/operationalLocationClient';
+import { fetchAdminCatalogue, type CatalogueItem } from '../catalogue/catalogueClient';
 import {
   fetchInventoryState,
   recordInventoryMovement,
@@ -19,6 +20,7 @@ function formatMilli(value: number, unit: 'g' | 'ml' | 'unit') {
 
 export function AdminInventoryPage() {
   const [branches, setBranches] = useState<OperationalBranch[]>([]);
+  const [catalogueItems, setCatalogueItems] = useState<CatalogueItem[]>([]);
   const [branchId, setBranchId] = useState('');
   const [state, setState] = useState<InventoryState | null>(null);
   const [loadState, setLoadState] = useState<LoadState>('loading');
@@ -58,10 +60,12 @@ export function AdminInventoryPage() {
 
   useEffect(() => {
     let active = true;
-    fetchOperationalLocations().then((rows) => {
+    Promise.all([fetchOperationalLocations(), fetchAdminCatalogue()]).then(([rows, catalogue]) => {
       if (!active) return;
       const available = rows.filter((row) => row.isActive);
       setBranches(available);
+      setCatalogueItems(catalogue.items);
+      setRecipeItemId((current) => current || catalogue.items[0]?.id || '');
       const defaultBranch = available.find((row) => row.isDefault) ?? available[0];
       if (!defaultBranch) {
         setError('No active branch is available');
@@ -72,7 +76,7 @@ export function AdminInventoryPage() {
       void reload(defaultBranch.id);
     }).catch((cause) => {
       if (!active) return;
-      setError(cause instanceof Error ? cause.message : 'Branches could not be loaded');
+      setError(cause instanceof Error ? cause.message : 'Inventory dependencies could not be loaded');
       setLoadState('error');
     });
     return () => { active = false; };
@@ -81,6 +85,7 @@ export function AdminInventoryPage() {
   }, []);
 
   const selectedBranch = useMemo(() => branches.find((row) => row.id === branchId), [branches, branchId]);
+  const selectedRecipeItem = useMemo(() => catalogueItems.find((item) => item.id === recipeItemId), [catalogueItems, recipeItemId]);
 
   async function runMutation(action: () => Promise<void>) {
     setBusy(true);
@@ -119,11 +124,11 @@ export function AdminInventoryPage() {
   function submitRecipe(event: FormEvent) {
     event.preventDefault();
     const numeric = Number(recipeQty);
-    if (!recipeItemId.trim() || !recipeInventoryItemId || !recipeName.trim() || !Number.isFinite(numeric) || numeric <= 0) return;
+    if (!recipeItemId || !recipeInventoryItemId || !recipeName.trim() || !Number.isFinite(numeric) || numeric <= 0) return;
     void runMutation(async () => {
       await saveRecipe({
-        itemId: recipeItemId.trim(),
-        variantId: recipeVariantId.trim() || null,
+        itemId: recipeItemId,
+        variantId: recipeVariantId || null,
         name: recipeName.trim(),
         isActive: true,
         components: [{ inventoryItemId: recipeInventoryItemId, quantityMilli: Math.round(numeric * 1000) }],
@@ -181,18 +186,22 @@ export function AdminInventoryPage() {
           <h2 className="admin-section-title admin-section-title--spaced">Recipes</h2>
           <table className="data-table admin-table">
             <thead><tr><th>Name</th><th>Catalogue item</th><th>Variant</th><th>Components</th></tr></thead>
-            <tbody>{state.recipes.length===0 ? <tr><td colSpan={4}>No recipes configured.</td></tr> : state.recipes.map((recipe)=><tr key={recipe.id}><td>{recipe.name}</td><td>{recipe.itemId}</td><td>{recipe.variantId ?? 'Default'}</td><td>{recipe.components.map((c)=>`${state.items.find((i)=>i.id===c.inventoryItemId)?.name ?? c.inventoryItemId}: ${c.quantityMilli/1000}`).join(', ')}</td></tr>)}</tbody>
+            <tbody>{state.recipes.length===0 ? <tr><td colSpan={4}>No recipes configured.</td></tr> : state.recipes.map((recipe)=>{
+              const catalogueItem = catalogueItems.find((item)=>item.id===recipe.itemId);
+              const variant = catalogueItem?.variants.find((row)=>row.id===recipe.variantId);
+              return <tr key={recipe.id}><td>{recipe.name}</td><td>{catalogueItem ? `${catalogueItem.sku} — ${catalogueItem.name}` : recipe.itemId}</td><td>{variant?.label ?? (recipe.variantId ? recipe.variantId : 'Default')}</td><td>{recipe.components.map((c)=>`${state.items.find((i)=>i.id===c.inventoryItemId)?.name ?? c.inventoryItemId}: ${c.quantityMilli/1000}`).join(', ')}</td></tr>;
+            })}</tbody>
           </table>
 
           <h2 className="admin-section-title admin-section-title--spaced">Create recipe</h2>
-          <p className="form-hint">Catalogue and variant IDs are server-owned IDs from the live Menu editor. Recipe quantities use the selected inventory item's base unit.</p>
+          <p className="form-hint">Select the live catalogue product or add-on. Variant-specific recipes override the item's default recipe.</p>
           <form className="admin-form-grid" onSubmit={submitRecipe}>
-            <label>Catalogue item ID<input value={recipeItemId} onChange={(e)=>setRecipeItemId(e.target.value)} required /></label>
-            <label>Variant ID (optional)<input value={recipeVariantId} onChange={(e)=>setRecipeVariantId(e.target.value)} /></label>
+            <label>Catalogue item<select value={recipeItemId} onChange={(e)=>{setRecipeItemId(e.target.value);setRecipeVariantId('');}} required>{catalogueItems.map((item)=><option key={item.id} value={item.id}>{item.sku} — {item.name}{item.kind==='addon'?' (add-on)':''}</option>)}</select></label>
+            <label>Variant<select value={recipeVariantId} onChange={(e)=>setRecipeVariantId(e.target.value)}><option value="">Default recipe</option>{selectedRecipeItem?.variants.map((variant)=><option key={variant.id} value={variant.id}>{variant.label}</option>)}</select></label>
             <label>Recipe name<input value={recipeName} onChange={(e)=>setRecipeName(e.target.value)} required /></label>
             <label>Component<select value={recipeInventoryItemId} onChange={(e)=>setRecipeInventoryItemId(e.target.value)} required>{state.items.map((item)=><option key={item.id} value={item.id}>{item.sku} — {item.name}</option>)}</select></label>
             <label>Quantity in base units<input type="number" min="0.001" step="0.001" value={recipeQty} onChange={(e)=>setRecipeQty(e.target.value)} required /></label>
-            <button className="btn-primary" type="submit" disabled={busy || state.items.length===0}>Save active recipe</button>
+            <button className="btn-primary" type="submit" disabled={busy || state.items.length===0 || catalogueItems.length===0}>Save active recipe</button>
           </form>
         </>
       )}
