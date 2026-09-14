@@ -14,11 +14,13 @@ import {
   placeOrder,
   quoteOrder,
   type FulfillmentType,
+  type OrderPlacementPayload,
   type OrderQuote,
   type OrderSnapshot,
 } from './orderClient';
 
 export type PlacementAttempt = { signature: string; clientRequestId: string };
+type TenderType = 'cash' | 'unpaid';
 
 type Props = {
   lines: CartLine[];
@@ -43,6 +45,7 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
   const policy = useQuery({ queryKey: ['ordering-policy'], queryFn: () => fetchOrderingPolicy() });
   const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>('asap');
   const [requestedPickupAt, setRequestedPickupAt] = useState('');
+  const [tenderType, setTenderType] = useState<TenderType>('cash');
   const [trustedQuote, setTrustedQuote] = useState<{ signature: string; quote: OrderQuote } | null>(null);
   const slots = useMemo(
     () => policy.data ? generateScheduleSlots(policy.data) : [],
@@ -52,12 +55,13 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
     () => buildOrderIntent(lines, fulfillmentType, requestedPickupAt || undefined),
     [fulfillmentType, lines, requestedPickupAt],
   );
-  const signature = orderIntentSignature(intent);
-  const currentQuote = trustedQuote?.signature === signature ? trustedQuote.quote : null;
+  const pricingSignature = orderIntentSignature(intent);
+  const signature = `${pricingSignature}|tender:${tenderType}`;
+  const currentQuote = trustedQuote?.signature === pricingSignature ? trustedQuote.quote : null;
 
   const quote = useMutation({
     mutationFn: () => quoteOrder(intent),
-    onSuccess: (result) => setTrustedQuote({ signature, quote: result }),
+    onSuccess: (result) => setTrustedQuote({ signature: pricingSignature, quote: result }),
   });
 
   const place = useMutation({
@@ -66,7 +70,12 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
       if (placementAttempt.current?.signature !== signature) {
         placementAttempt.current = { signature, clientRequestId: createClientRequestId() };
       }
-      return placeOrder({ ...intent, clientRequestId: placementAttempt.current.clientRequestId });
+      const payload = {
+        ...intent,
+        clientRequestId: placementAttempt.current.clientRequestId,
+        tenderType,
+      } as OrderPlacementPayload & { tenderType: TenderType };
+      return placeOrder(payload);
     },
     onSuccess: async (order) => {
       placementAttempt.current = null;
@@ -81,7 +90,7 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
     <section aria-labelledby="order-checkout-title" className="mx-auto max-w-2xl rounded-2xl border border-border bg-card p-5 shadow-sm">
       <h2 id="order-checkout-title" className="font-display text-xl text-primary">Review order</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        The server revalidates catalogue availability, options, scheduling and price before placement.
+        The server revalidates catalogue availability, options, scheduling, price, shift and tender before placement.
       </p>
 
       <fieldset className="mt-5">
@@ -134,11 +143,28 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
         </div>
       )}
 
-      <div className="mt-5 rounded-xl bg-muted p-4">
-        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Payment</p>
-        <p className="mt-1 text-lg font-bold text-foreground">Pay at counter</p>
-        <p className="text-sm text-muted-foreground">Order placement does not claim payment or settlement.</p>
-      </div>
+      <fieldset className="mt-5 rounded-xl bg-muted p-4">
+        <legend className="px-1 text-xs font-bold uppercase tracking-wide text-muted-foreground">Tender</legend>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant={tenderType === 'cash' ? 'default' : 'outline'}
+            onClick={() => setTenderType('cash')}
+          >
+            Cash paid now
+          </Button>
+          <Button
+            type="button"
+            variant={tenderType === 'unpaid' ? 'default' : 'outline'}
+            onClick={() => setTenderType('unpaid')}
+          >
+            Leave unpaid
+          </Button>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Cash is recorded by the server against the active shift. Card and e-wallet processor settlement remain outside Phase 2.
+        </p>
+      </fieldset>
 
       {currentQuote && (
         <div aria-live="polite" className="mt-5 rounded-xl border border-primary/30 bg-accent p-4">
@@ -168,7 +194,7 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
           disabled={!currentQuote || place.isPending}
           onClick={() => place.mutate()}
         >
-          {place.isPending ? 'Placing…' : 'Place order · Pay at counter'}
+          {place.isPending ? 'Placing…' : tenderType === 'cash' ? 'Place order · Record cash' : 'Place order · Unpaid'}
         </Button>
       </div>
     </section>
@@ -186,7 +212,7 @@ export function AuthoritativeOrderReceipt({ order, onNewSale }: { order: OrderSn
           : 'Now pickup'} · status {order.status}
       </p>
       <p className="mt-4 text-2xl font-bold text-foreground">{formatRmFromSen(order.totalSen)}</p>
-      <p className="mt-1 text-sm font-semibold text-muted-foreground">Pay at counter · unpaid settlement state</p>
+      <p className="mt-1 text-sm font-semibold text-muted-foreground">Tender and payment state persisted by the server.</p>
       <Button type="button" className="mt-5" onClick={onNewSale}>New sale</Button>
     </section>
   );
