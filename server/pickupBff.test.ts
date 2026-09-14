@@ -44,7 +44,13 @@ const adminProfile = {
   disabled_at: null,
 };
 
-const staffProfile = { ...adminProfile, user_id: 'staff-user', app_role: 'staff' };
+const staffProfile = {
+  ...adminProfile,
+  user_id: 'staff-user',
+  email: 'staff@example.test',
+  display_name: 'Aida Staff',
+  app_role: 'staff',
+};
 
 const configuration = {
   branch: {
