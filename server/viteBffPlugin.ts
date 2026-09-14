@@ -62,6 +62,7 @@ import {
   handleAdminSaveLoyaltyProgram,
   handleAdminSaveLoyaltyReward,
 } from './loyaltyBff.js';
+import { handlePosMemberLoyalty } from './posLoyaltyBff.js';
 
 type Handler = (
   request: Request,
@@ -116,6 +117,7 @@ const handlers = new Map<string, Handler>([
   ['/api/v1/admin/loyalty/reward', handleAdminSaveLoyaltyReward],
   ['/api/v1/admin/loyalty/member', handleAdminMemberLoyalty],
   ['/api/v1/admin/loyalty/adjust', handleAdminAdjustMemberLoyalty],
+  ['/api/v1/pos/member-loyalty', handlePosMemberLoyalty],
 ]);
 
 function requestUrl(request: IncomingMessage): string {
@@ -187,8 +189,8 @@ function mount(server: ConnectServer, env: Record<string, string | undefined>) {
 }
 
 /**
- * Serves employee/admin, catalogue, ordering, terminal, shift, pickup, inventory,
- * and loyalty BFF handlers during Vite dev/preview. Production serverless
+ * Serves employee/admin, catalogue, ordering, terminal, shift, pickup and
+ * loyalty BFF handlers during Vite dev/preview. Production serverless
  * deployments use the same root `/api` handlers.
  */
 export function aidaBffPlugin(env: Record<string, string | undefined>): Plugin {
