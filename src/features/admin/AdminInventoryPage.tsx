@@ -1,335 +1,200 @@
-import { useState, type FormEvent } from 'react';
-import { Plus } from 'lucide-react';
-import { PREVIEW_MENU, PREVIEW_ORG } from '../../preview/fixtures/catalog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { AdminPageShell } from './AdminPageShell';
+import { fetchOperationalLocations, type OperationalBranch } from '../locations/operationalLocationClient';
+import {
+  fetchInventoryState,
+  recordInventoryMovement,
+  saveInventoryItem,
+  saveRecipe,
+  type InventoryState,
+} from '../inventory/inventoryClient';
 import './admin.css';
 
-const RECIPES = [
-  { id: 'r1', item: 'Salted Caramel Latte', yield: '1 drink', ingredients: 'Espresso 18g, milk 180ml, caramel 15ml' },
-  { id: 'r2', item: 'Butter Croissant', yield: '1 unit', ingredients: 'Frozen croissant 1 pc, bake 12 min' },
-  { id: 'r3', item: 'Chicken Wrap', yield: '1 wrap', ingredients: 'Tortilla, chicken 80g, veg 40g' },
-];
+type LoadState = 'loading' | 'ready' | 'error';
 
-const WASTAGE = [
-  { id: 'w1', when: '20 Jul 2026', item: 'Oat milk', qty: '0.5 L', reason: 'Expired', staff: 'Nadia' },
-  { id: 'w2', when: '19 Jul 2026', item: 'Butter Croissant', qty: '3 pc', reason: 'End of day', staff: 'Hafiz' },
-];
+function formatMilli(value: number, unit: 'g' | 'ml' | 'unit') {
+  const amount = value / 1000;
+  return `${Number.isInteger(amount) ? amount : amount.toFixed(3)} ${unit}`;
+}
 
-const STOCK_ROWS = PREVIEW_MENU.map((item) => ({
-  sku: item.sku,
-  name: item.name,
-  onHand: item.available ? 24 - item.id.length : 0,
-  par: 12,
-  inventory: PREVIEW_ORG.inventoryCode,
-}));
-
-const SALES_POINT_NAMES = PREVIEW_ORG.branches.flatMap((b) => b.salesPoints.map((sp) => sp.name));
-
-type TransferRow = {
-  id: string;
-  when: string;
-  item: string;
-  qty: string;
-  from: string;
-  to: string;
-  note: string;
-};
-
-const INITIAL_TRANSFERS: TransferRow[] = [
-  { id: 't1', when: '20 Jul 2026 15:30', item: 'Butter Croissant', qty: '12 pc', from: 'Main Counter', to: 'Snack Station', note: 'Afternoon restock' },
-  { id: 't2', when: '19 Jul 2026 08:10', item: 'Oat milk', qty: '2 L', from: 'Main Counter', to: 'Snack Station', note: 'Opening prep' },
-];
-
-type TransferForm = { item: string; qty: string; from: string; to: string; note: string };
-
-const emptyTransferForm = (): TransferForm => ({
-  item: STOCK_ROWS[0]?.name ?? '',
-  qty: '',
-  from: SALES_POINT_NAMES[0] ?? '',
-  to: SALES_POINT_NAMES[1] ?? SALES_POINT_NAMES[0] ?? '',
-  note: '',
-});
-
-type Tab = 'stock' | 'recipes' | 'wastage' | 'transfers';
-
-/** Stock, Recipes, Wastage, and the old Reports > Inventory low-stock view
- * used to be 4 separate pages over the same small ingredient list — one
- * page, tabbed, until there's enough real inventory data to justify
- * splitting them apart again. */
 export function AdminInventoryPage() {
-  const [tab, setTab] = useState<Tab>('stock');
-  const low = STOCK_ROWS.filter((r) => r.onHand > 0 && r.onHand <= r.par);
+  const [branches, setBranches] = useState<OperationalBranch[]>([]);
+  const [branchId, setBranchId] = useState('');
+  const [state, setState] = useState<InventoryState | null>(null);
+  const [loadState, setLoadState] = useState<LoadState>('loading');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const [transfers, setTransfers] = useState<TransferRow[]>(INITIAL_TRANSFERS);
-  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
-  const [transferForm, setTransferForm] = useState<TransferForm>(emptyTransferForm);
+  const [sku, setSku] = useState('');
+  const [name, setName] = useState('');
+  const [unit, setUnit] = useState<'g' | 'ml' | 'unit'>('unit');
 
-  function openTransferDialog() {
-    setTransferForm(emptyTransferForm());
-    setTransferDialogOpen(true);
+  const [movementItemId, setMovementItemId] = useState('');
+  const [movementQty, setMovementQty] = useState('');
+  const [movementKind, setMovementKind] = useState<'receiving' | 'waste' | 'adjustment'>('receiving');
+  const [movementNote, setMovementNote] = useState('');
+
+  const [recipeItemId, setRecipeItemId] = useState('');
+  const [recipeVariantId, setRecipeVariantId] = useState('');
+  const [recipeName, setRecipeName] = useState('');
+  const [recipeInventoryItemId, setRecipeInventoryItemId] = useState('');
+  const [recipeQty, setRecipeQty] = useState('');
+
+  async function reload(targetBranchId = branchId) {
+    if (!targetBranchId) return;
+    setLoadState('loading');
+    setError('');
+    try {
+      const next = await fetchInventoryState(targetBranchId);
+      setState(next);
+      setMovementItemId((current) => current || next.items[0]?.id || '');
+      setRecipeInventoryItemId((current) => current || next.items[0]?.id || '');
+      setLoadState('ready');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Inventory could not be loaded');
+      setLoadState('error');
+    }
   }
 
-  function closeTransferDialog() {
-    setTransferDialogOpen(false);
+  useEffect(() => {
+    let active = true;
+    fetchOperationalLocations().then((rows) => {
+      if (!active) return;
+      const available = rows.filter((row) => row.isActive);
+      setBranches(available);
+      const defaultBranch = available.find((row) => row.isDefault) ?? available[0];
+      if (!defaultBranch) {
+        setError('No active branch is available');
+        setLoadState('error');
+        return;
+      }
+      setBranchId(defaultBranch.id);
+      void reload(defaultBranch.id);
+    }).catch((cause) => {
+      if (!active) return;
+      setError(cause instanceof Error ? cause.message : 'Branches could not be loaded');
+      setLoadState('error');
+    });
+    return () => { active = false; };
+    // Initial authority load only; branch changes are handled explicitly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const selectedBranch = useMemo(() => branches.find((row) => row.id === branchId), [branches, branchId]);
+
+  async function runMutation(action: () => Promise<void>) {
+    setBusy(true);
+    setError('');
+    try {
+      await action();
+      await reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Inventory update failed');
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function handleTransferSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const qty = transferForm.qty.trim();
-    if (!transferForm.item || !qty || !transferForm.from || !transferForm.to) return;
-    if (transferForm.from === transferForm.to) return;
+  function submitItem(event: FormEvent) {
+    event.preventDefault();
+    if (!sku.trim() || !name.trim()) return;
+    void runMutation(async () => {
+      await saveInventoryItem({ sku: sku.trim(), name: name.trim(), baseUnit: unit, isActive: true });
+      setSku(''); setName('');
+    });
+  }
 
-    const newTransfer: TransferRow = {
-      id: `custom-${transfers.length}`,
-      when: 'Just now (preview)',
-      item: transferForm.item,
-      qty,
-      from: transferForm.from,
-      to: transferForm.to,
-      note: transferForm.note.trim(),
-    };
-    setTransfers((prev) => [newTransfer, ...prev]);
-    closeTransferDialog();
+  function submitMovement(event: FormEvent) {
+    event.preventDefault();
+    const numeric = Number(movementQty);
+    if (!branchId || !movementItemId || !Number.isFinite(numeric) || numeric === 0) return;
+    const absoluteMilli = Math.round(Math.abs(numeric) * 1000);
+    const deltaMilli = movementKind === 'receiving' ? absoluteMilli : movementKind === 'waste' ? -absoluteMilli : Math.round(numeric * 1000);
+    void runMutation(async () => {
+      await recordInventoryMovement({ branchId, inventoryItemId: movementItemId, deltaMilli, movementKind, note: movementNote.trim() || undefined });
+      setMovementQty(''); setMovementNote('');
+    });
+  }
+
+  function submitRecipe(event: FormEvent) {
+    event.preventDefault();
+    const numeric = Number(recipeQty);
+    if (!recipeItemId.trim() || !recipeInventoryItemId || !recipeName.trim() || !Number.isFinite(numeric) || numeric <= 0) return;
+    void runMutation(async () => {
+      await saveRecipe({
+        itemId: recipeItemId.trim(),
+        variantId: recipeVariantId.trim() || null,
+        name: recipeName.trim(),
+        isActive: true,
+        components: [{ inventoryItemId: recipeInventoryItemId, quantityMilli: Math.round(numeric * 1000) }],
+      });
+      setRecipeName(''); setRecipeQty('');
+    });
   }
 
   return (
-    <AdminPageShell
-      pageId="admin-inventory"
-      title="Inventory"
-      hint={`Pool ${PREVIEW_ORG.inventoryCode} — shared across sales points.`}
-    >
-      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
-        <TabsList>
-          <TabsTrigger value="stock">Stock on hand</TabsTrigger>
-          <TabsTrigger value="recipes">Recipes</TabsTrigger>
-          <TabsTrigger value="wastage">Wastage</TabsTrigger>
-          <TabsTrigger value="transfers">Transfers</TabsTrigger>
-        </TabsList>
+    <AdminPageShell pageId="admin-inventory" title="Inventory & recipes" hint="Live branch inventory. All balances and recipe consumption are server-authoritative.">
+      <div className="admin-form-grid">
+        <label>
+          Branch
+          <select value={branchId} disabled={busy} onChange={(event) => { const id=event.target.value; setBranchId(id); void reload(id); }}>
+            {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.code} — {branch.name}</option>)}
+          </select>
+        </label>
+      </div>
 
-        <TabsContent value="stock">
+      {error && <p role="alert" className="form-error">{error}</p>}
+      {loadState === 'loading' && <p className="form-hint">Loading authoritative inventory…</p>}
+
+      {loadState === 'ready' && state && (
+        <>
+          <h2 className="admin-section-title admin-section-title--spaced">Stock on hand — {selectedBranch?.name ?? 'Branch'}</h2>
           <table className="data-table admin-table">
-            <thead>
-              <tr>
-                <th>SKU</th>
-                <th>Item</th>
-                <th>On hand</th>
-                <th>Par</th>
-                <th>Status</th>
-              </tr>
-            </thead>
+            <thead><tr><th>SKU</th><th>Item</th><th>On hand</th><th>Status</th></tr></thead>
             <tbody>
-              {STOCK_ROWS.map((row) => (
-                <tr key={row.sku}>
-                  <td>{row.sku}</td>
-                  <td>{row.name}</td>
-                  <td>{row.onHand}</td>
-                  <td>{row.par}</td>
-                  <td>
-                    {row.onHand === 0 ? (
-                      <span className="status-pill status-pill--warn">Sold out</span>
-                    ) : row.onHand <= row.par ? (
-                      <span className="status-pill status-pill--warn">Low</span>
-                    ) : (
-                      <span className="status-pill status-pill--ok">In stock</span>
-                    )}
-                  </td>
+              {state.items.length === 0 ? <tr><td colSpan={4}>No inventory items configured.</td></tr> : state.items.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.sku}</td><td>{item.name}</td><td>{formatMilli(item.onHandMilli,item.baseUnit)}</td>
+                  <td>{item.onHandMilli === 0 ? <span className="status-pill status-pill--warn">Out</span> : <span className="status-pill status-pill--ok">Available</span>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          <h2 className="admin-section-title admin-section-title--spaced">Low stock alerts</h2>
-          {low.length === 0 ? (
-            <p className="form-hint">No low-stock rows in sample.</p>
-          ) : (
-            <ul className="admin-alerts admin-alerts--inline">
-              {low.map((r) => (
-                <li key={r.sku}>
-                  {r.name} ({r.onHand} left)
-                </li>
-              ))}
-            </ul>
-          )}
-        </TabsContent>
+          <h2 className="admin-section-title admin-section-title--spaced">Add inventory item</h2>
+          <form className="admin-form-grid" onSubmit={submitItem}>
+            <label>SKU<input value={sku} onChange={(e)=>setSku(e.target.value)} required /></label>
+            <label>Name<input value={name} onChange={(e)=>setName(e.target.value)} required /></label>
+            <label>Base unit<select value={unit} onChange={(e)=>setUnit(e.target.value as 'g'|'ml'|'unit')}><option value="unit">unit</option><option value="g">g</option><option value="ml">ml</option></select></label>
+            <button className="btn-primary" type="submit" disabled={busy}>Save item</button>
+          </form>
 
-        <TabsContent value="recipes">
-          <p className="form-hint">COGS and yield tracking — future inventory API.</p>
+          <h2 className="admin-section-title admin-section-title--spaced">Receive / waste / adjust stock</h2>
+          <form className="admin-form-grid" onSubmit={submitMovement}>
+            <label>Inventory item<select value={movementItemId} onChange={(e)=>setMovementItemId(e.target.value)} required>{state.items.map((item)=><option key={item.id} value={item.id}>{item.sku} — {item.name}</option>)}</select></label>
+            <label>Movement<select value={movementKind} onChange={(e)=>setMovementKind(e.target.value as 'receiving'|'waste'|'adjustment')}><option value="receiving">Receiving</option><option value="waste">Waste</option><option value="adjustment">Adjustment (+/-)</option></select></label>
+            <label>Quantity in base units<input type="number" step="0.001" value={movementQty} onChange={(e)=>setMovementQty(e.target.value)} required /></label>
+            <label>Note<input value={movementNote} onChange={(e)=>setMovementNote(e.target.value)} /></label>
+            <button className="btn-primary" type="submit" disabled={busy || state.items.length===0}>Post movement</button>
+          </form>
+
+          <h2 className="admin-section-title admin-section-title--spaced">Recipes</h2>
           <table className="data-table admin-table">
-            <thead>
-              <tr>
-                <th>Menu item</th>
-                <th>Yield</th>
-                <th>Ingredients (sample)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {RECIPES.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.item}</td>
-                  <td>{r.yield}</td>
-                  <td>{r.ingredients}</td>
-                </tr>
-              ))}
-            </tbody>
+            <thead><tr><th>Name</th><th>Catalogue item</th><th>Variant</th><th>Components</th></tr></thead>
+            <tbody>{state.recipes.length===0 ? <tr><td colSpan={4}>No recipes configured.</td></tr> : state.recipes.map((recipe)=><tr key={recipe.id}><td>{recipe.name}</td><td>{recipe.itemId}</td><td>{recipe.variantId ?? 'Default'}</td><td>{recipe.components.map((c)=>`${state.items.find((i)=>i.id===c.inventoryItemId)?.name ?? c.inventoryItemId}: ${c.quantityMilli/1000}`).join(', ')}</td></tr>)}</tbody>
           </table>
-        </TabsContent>
 
-        <TabsContent value="wastage">
-          <p className="form-hint">Adjustments post to inventory when API connects.</p>
-          {WASTAGE.length === 0 ? (
-            <div className="empty-state">
-              <h2 className="admin-section-title">No wastage logged</h2>
-            </div>
-          ) : (
-            <table className="data-table admin-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Item</th>
-                  <th>Quantity</th>
-                  <th>Reason</th>
-                  <th>Recorded by</th>
-                </tr>
-              </thead>
-              <tbody>
-                {WASTAGE.map((row) => (
-                  <tr key={row.id}>
-                    <td>{row.when}</td>
-                    <td>{row.item}</td>
-                    <td>{row.qty}</td>
-                    <td>{row.reason}</td>
-                    <td>{row.staff}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </TabsContent>
-
-        <TabsContent value="transfers">
-          <div className="admin-row-actions admin-row-actions--spaced">
-            <button type="button" className="btn-primary" onClick={openTransferDialog}>
-              <Plus size={16} aria-hidden="true" />
-              New transfer
-            </button>
-          </div>
-          {transfers.length === 0 ? (
-            <div className="empty-state">
-              <h2 className="admin-section-title">No transfers logged</h2>
-            </div>
-          ) : (
-            <table className="data-table admin-table">
-              <thead>
-                <tr>
-                  <th>When</th>
-                  <th>Item</th>
-                  <th>Quantity</th>
-                  <th>From</th>
-                  <th>To</th>
-                  <th>Note</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transfers.map((row) => (
-                  <tr key={row.id}>
-                    <td>{row.when}</td>
-                    <td>{row.item}</td>
-                    <td>{row.qty}</td>
-                    <td>{row.from}</td>
-                    <td>{row.to}</td>
-                    <td>{row.note || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </TabsContent>
-      </Tabs>
-
-      {transferDialogOpen && (
-        <div className="confirm-dialog-overlay" role="presentation" onClick={closeTransferDialog}>
-          <div
-            className="confirm-dialog"
-            role="dialog"
-            aria-labelledby="transfer-dialog-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="transfer-dialog-title" className="admin-section-title">
-              New stock transfer
-            </h2>
-            <p className="form-hint">Session preview only — no inventory API yet.</p>
-            <form className="admin-form" onSubmit={handleTransferSubmit}>
-              <label>
-                Item
-                <select
-                  value={transferForm.item}
-                  onChange={(e) => setTransferForm((f) => ({ ...f, item: e.target.value }))}
-                >
-                  {STOCK_ROWS.map((row) => (
-                    <option key={row.sku} value={row.name}>
-                      {row.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Quantity
-                <input
-                  value={transferForm.qty}
-                  onChange={(e) => setTransferForm((f) => ({ ...f, qty: e.target.value }))}
-                  placeholder="e.g. 6 pc, 2 L"
-                  required
-                  autoFocus
-                />
-              </label>
-              <label>
-                From
-                <select
-                  value={transferForm.from}
-                  onChange={(e) => setTransferForm((f) => ({ ...f, from: e.target.value }))}
-                >
-                  {SALES_POINT_NAMES.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                To
-                <select
-                  value={transferForm.to}
-                  onChange={(e) => setTransferForm((f) => ({ ...f, to: e.target.value }))}
-                >
-                  {SALES_POINT_NAMES.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {transferForm.from === transferForm.to && (
-                <p className="form-error">From and To must be different sales points.</p>
-              )}
-              <label>
-                Note (optional)
-                <input
-                  value={transferForm.note}
-                  onChange={(e) => setTransferForm((f) => ({ ...f, note: e.target.value }))}
-                />
-              </label>
-              <div className="confirm-dialog__actions">
-                <button type="button" className="btn-secondary" onClick={closeTransferDialog}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary" disabled={transferForm.from === transferForm.to}>
-                  Log transfer
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+          <h2 className="admin-section-title admin-section-title--spaced">Create recipe</h2>
+          <p className="form-hint">Catalogue and variant IDs are server-owned IDs from the live Menu editor. Recipe quantities use the selected inventory item's base unit.</p>
+          <form className="admin-form-grid" onSubmit={submitRecipe}>
+            <label>Catalogue item ID<input value={recipeItemId} onChange={(e)=>setRecipeItemId(e.target.value)} required /></label>
+            <label>Variant ID (optional)<input value={recipeVariantId} onChange={(e)=>setRecipeVariantId(e.target.value)} /></label>
+            <label>Recipe name<input value={recipeName} onChange={(e)=>setRecipeName(e.target.value)} required /></label>
+            <label>Component<select value={recipeInventoryItemId} onChange={(e)=>setRecipeInventoryItemId(e.target.value)} required>{state.items.map((item)=><option key={item.id} value={item.id}>{item.sku} — {item.name}</option>)}</select></label>
+            <label>Quantity in base units<input type="number" min="0.001" step="0.001" value={recipeQty} onChange={(e)=>setRecipeQty(e.target.value)} required /></label>
+            <button className="btn-primary" type="submit" disabled={busy || state.items.length===0}>Save active recipe</button>
+          </form>
+        </>
       )}
     </AdminPageShell>
   );
