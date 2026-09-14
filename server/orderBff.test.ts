@@ -186,6 +186,40 @@ describe('order BFF', () => {
     });
   });
 
+  it('surfaces authoritative branch scheduling rejection without local fallback', async () => {
+    const payload = {
+      clientRequestId: 'request-closed',
+      fulfillmentType: 'asap',
+      items: [{ itemId: 'item-1', addOnIds: [], quantity: 1 }],
+    };
+    const { deps, calls } = depsWith([
+      jsonResponse({ id: 'employee-user', email: 'employee@example.test' }),
+      jsonResponse([employeeProfile('staff')]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
+      jsonResponse({
+        code: '22023',
+        message: 'Branch is currently closed for pickup',
+        details: 'BRANCH_CLOSED',
+      }, 400),
+    ]);
+
+    const response = await handleEmployeePlaceOrder(
+      dashboardRequest('/api/v1/orders/place', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+      deps,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: 'Branch is currently closed for pickup',
+      code: 'ORDER_VALIDATION_FAILED',
+    });
+    expect(calls[3]?.url).toContain('/rest/v1/rpc/place_pos_order');
+    expect(calls).toHaveLength(4);
+  });
+
   it('rejects POS placement when the terminal HttpOnly cookie is absent', async () => {
     const { deps, calls } = depsWith([
       jsonResponse({ id: 'employee-user', email: 'employee@example.test' }),
