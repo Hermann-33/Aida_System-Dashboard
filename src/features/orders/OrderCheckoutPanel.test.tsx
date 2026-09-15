@@ -44,14 +44,17 @@ const order = {
   shiftId: 'shift-main', tenderType: 'cash', paymentState: 'paid', paidAt: '2026-08-14T00:00:00Z',
   fulfillmentType: 'asap', requestedPickupAt: null, prepareAt: null,
   serverNow: '2026-08-14T00:00:00Z', scheduleState: null, status: 'confirmed', statusVersion: 1,
-  currency: 'MYR', pricingVersion: 2, subtotalSen: 1450, discountSen: 0, totalSen: 1450, voucher: null,
+  currency: 'MYR', pricingVersion: 2, subtotalSen: 1450, voucherDiscountSen: 0, promotionDiscountSen: 0,
+  discountSen: 0, totalSen: 1450, voucher: null, promotions: [],
   createdAt: '2026-08-14T00:00:00Z', updatedAt: '2026-08-14T00:00:00Z',
   statusUpdatedAt: '2026-08-14T00:00:00Z', preparingAt: null, readyAt: null,
   completedAt: null, cancelledAt: null, lines: [],
 } satisfies OrderSnapshot;
 
 const quote = {
-  pricingVersion: 2, currency: 'MYR' as const, subtotalSen: 1450, discountSen: 0, totalSen: 1450, voucher: null,
+  pricingVersion: 2, currency: 'MYR' as const, subtotalSen: 1450,
+  voucherDiscountSen: 0, promotionDiscountSen: 0, discountSen: 0, totalSen: 1450,
+  voucher: null, promotions: [],
   fulfillmentType: 'asap' as const, requestedPickupAt: null, serverNow: policy.serverNow,
   schedulePolicy: { timezone: policy.timezone, scheduleEnabled: true, minimumLeadMinutes: 15, preparationLeadMinutes: 15, slotIntervalMinutes: 15, maximumAdvanceDays: 7 },
   lines: [],
