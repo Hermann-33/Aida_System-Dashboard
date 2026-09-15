@@ -1,95 +1,33 @@
 # POS/Admin Mocks and Placeholders Register
 
-Updated: 2026-09-11
+Updated: 2026-09-15
 
-## Trusted live paths
+## Trusted live paths through Phase 6
 
-The following are live backend integrations, not preview authority:
-
-- employee/Admin session and trusted branch assignments;
-- Admin Members;
-- catalogue categories/items/variants/options/add-ons;
-- authoritative POS quote/order placement;
-- Now/scheduled pickup policy and workload classification;
-- live order queue/detail and versioned fulfilment transitions;
-- branches and sales points;
-- terminals and terminal status;
-- manager-issued terminal enrolment codes;
-- terminal enrolment/revocation;
-- Admin employee directory and branch assignment;
-- terminal-bound POS placement and persisted branch/sales-point/terminal attribution.
+Live backend integrations include employee/Admin sessions and branch assignments; catalogue/order quote/place/status; branches/sales points/terminals and enrolment; shifts/cash/reconciliation; branch pickup policy/hours/capacity; inventory/recipes/stock movements; Admin loyalty program/rewards/member support; and POS member/voucher lookup/placement.
 
 ## Allowed local browser state
 
-Transient UI state is allowed for:
+Transient state may hold unsaved cart selections, quantity/note, local price estimate before quote, pickup/member/voucher selection intent, filters/dialog state, one retry-stable `clientRequestId`, and trusted status projections returned by APIs.
 
-- unsaved cart lines and selected catalogue IDs;
-- quantity/note;
-- local price estimates before quote;
-- Now/Schedule intent;
-- filters/dialog/loading/error state;
-- one retry-stable `clientRequestId`;
-- decoded terminal display context returned by trusted status endpoints.
-
-Local state must not become authority for catalogue validity/pricing, employee branch scope, terminal credential validity or operational attribution.
+Local state is never authority for role/scope, terminal/shift identity, prices/totals/discount, schedule capacity, stock balance, loyalty balance, voucher status or persisted order attribution.
 
 ## Preview boundary
 
-Explicit UI Preview may use fixture branches, sales points, terminals, employees and shifts for demonstration. Those fixture values are presentation-only.
+Explicit UI Preview may still demonstrate branches, terminals, employees, shifts, inventory, loyalty, payment and reports with fixtures. Live mode must never use preview identifiers or balances as fallback database/authorization/commercial truth.
 
-Live mode must not use preview identifiers as database foreign keys, authorization claims, terminal credentials or persisted order attribution.
+## Forbidden fake authority in live mode
 
-Admin Locations, Admin Terminals and Admin Employees now consume trusted APIs in live mode. Their Preview behavior remains intentionally separate.
+Do not use client-computed final totals/discounts, preview/local orders, fake payment success, local fulfilment progression, manufactured schedule slots, preview inventory sufficiency, preview loyalty balances/vouchers, or browser-stored employee/terminal secrets.
 
-## Terminal credential boundary
+## Still deferred / placeholder
 
-The real terminal credential is not a preview/local-storage value and must not be exposed to normal React state.
-
-Live flow:
-
-```text
-one-time enrolment code
- -> BFF enrol endpoint
- -> Supabase validates caller/branch/terminal
- -> credential returned once
- -> HttpOnly terminal cookie
- -> server-side forwarding for status/POS placement
-```
-
-Preview terminal samples must never be accepted by live APIs.
-
-## Removed/fake authority forbidden in live mode
-
-Do not use:
-
-- client-computed totals as final truth;
-- preview/local orders as persisted-order fallback;
-- fake order numbers;
-- fake payment/tender success;
-- local-only fulfilment state;
-- timer-driven order progression;
-- preview catalogue options to bypass live availability;
-- preview branch/sales-point/terminal IDs for live POS attribution;
-- local-storage employee or terminal secrets.
-
-## Still preview/deferred
-
-The following are not trusted live authority yet:
-
-- shifts, opening float, cash movement and variance;
-- employee Auth-user creation/role mutation/badge-PIN lifecycle;
-- branch opening hours/closures/capacity and explicit customer branch selection;
-- inventory/recipes/depletion/transfers;
-- loyalty/reward balances and redemption;
-- promotions/marketing publication authority;
-- payment settlement/refunds;
-- tax/accounting/trusted sales reporting;
+- employee Auth-user creation/role credential/badge-PIN lifecycle;
+- generalized promotions/marketing campaign authority — Phase 7;
+- trusted tax/accounting/reporting expansion — Phase 8;
+- payment capture/refunds/processor settlement;
 - printer/KDS/payment-device integrations;
-- many settings/integration presentation surfaces;
-- hosted production operations.
+- supplier/lot/expiry/procurement expansion;
+- hosted/deployment-heavy production operations.
 
-## Phase 1 boundary
-
-`TASK-OPS-002` is `COMPLETE`. Phase 1 evidence is in `docs/context/PHASE_1_OPERATIONAL_TOPOLOGY_CLOSEOUT_2026-09-11.md`.
-
-PR #20 and PR #17 remain the frozen Astra audit boundary. Do not begin Phase 2 until Astra findings are resolved or explicitly accepted.
+Phases 1–6 are `COMPLETE`; Phase 7 is next but not started.

@@ -1,166 +1,66 @@
 # POS/Admin State and Data Flow
 
-Updated: 2026-09-11
+Updated: 2026-09-15
 
-## Employee session
+## Trusted employee/terminal boundary
 
 ```text
-employee login
- -> same-origin BFF
- -> Supabase Auth
- -> user_profiles role/disabled check
- -> employee_branch_assignments
+employee login -> same-origin BFF -> Supabase Auth + trusted role/branch scope
  -> HttpOnly access/refresh cookies
- -> React receives identity + assignedBranchIds only
+terminal enrolment -> server validation -> HttpOnly terminal credential
 ```
 
-The employee bearer token is never persisted/read by browser JavaScript. Ordinary staff with no trusted branch assignment fail closed.
+React receives identity/status projections, not reusable bearer/terminal secrets.
 
-## Terminal enrolment/session
+## Shift and POS boundary
 
 ```text
-Admin creates terminal
- -> manager issues one-time enrolment code
- -> employee enters code on workstation
- -> POST terminal enrol endpoint
- -> BFF validates employee session and forwards caller JWT
- -> Supabase validates code + terminal + employee branch scope
- -> one terminal credential returned
- -> BFF stores credential in HttpOnly cookie
- -> React receives only trusted location/status projection
+employee + terminal credential
+ -> current/open shift BFF/RPC
+ -> open | lock | resume | close / cash movements
+ -> live POS quote/place
 ```
 
-The terminal credential is not exposed to normal React state or local storage.
+New POS placement requires an open shift. Matching `clientRequestId` retries may resolve a persisted order after the original shift locks/closes only under current terminal/caller authority.
 
-Terminal status resolution revalidates active terminal, sales point, branch and employee branch scope. Revocation or loss of branch scope blocks the flow.
+## Scheduling and inventory
 
-## Admin operational topology
+Admin branch pickup configuration uses trusted BFF/RPCs. POS/customer quote consumes server branch schedule/capacity and inventory sufficiency. Placement is final inventory authority and performs transactional non-negative depletion. Dashboard Inventory uses live branch stock and recipe RPCs; Preview inventory is separate.
+
+## Loyalty Admin flow
 
 ```text
-AdminLocationsPage
- -> operationalLocationClient
- -> same-origin BFF
- -> branch / sales-point RPCs
-
-AdminTerminalsPage
- -> operationalLocationClient
- -> Admin topology / save terminal / issue code / revoke RPCs
-
-AdminEmployeesPage
- -> operationalLocationClient
- -> trusted employee directory / branch-assignment RPCs
+Admin/Owner browser
+ -> same-origin loyalty BFF
+ -> caller JWT
+ -> loyalty admin/program/reward/member-support RPCs
+ -> server-owned balances/config/rewards
 ```
 
-Live mode uses these APIs. Explicit UI Preview follows a separate fixture path and remains non-authoritative.
+Adjustment results are server-derived and record actor/reason.
 
-## POS catalogue and quote
+## POS member/voucher flow
 
 ```text
-catalogue selection IDs
- -> local cart + estimate
- -> POST /api/v1/orders/quote
- -> employee BFF session validation
- -> caller JWT -> quote_order
- -> server catalogue/modifier/schedule validation
- -> authoritative integer-sen quote
+employee session + HttpOnly terminal credential + open shift
+ -> POS member-code lookup BFF
+ -> minimal trusted wallet/voucher projection
+ -> optional memberCode/voucherId intent
+ -> authoritative quote
+ -> authoritative place
+ -> atomic voucher consumption + immutable discount snapshot
 ```
 
-Local cart state is interaction only; server quote is commercial authority.
+Changing/removing the selected member or voucher invalidates the previous trusted quote.
 
-## Live POS placement — Phase 1
+## Order/status propagation
 
-```text
-employee session
- + HttpOnly terminal credential
- + selection/fulfilment intent
- -> POST /api/v1/orders/place
- -> order BFF
- -> caller JWT + server-held terminal credential
- -> place_pos_order(payload, credential)
- -> Supabase resolves terminal -> sales point -> branch
- -> validates employee may operate branch
- -> persists trusted POS order attribution
-```
+Dashboard list/detail/status uses BFF caller-JWT requests and trusted branch scope. Status mutations require legal transition + `statusVersion`. Customer Realtime remains invalidation followed by authorized refetch; Dashboard does not expose employee JWT for browser Realtime.
 
-Persisted POS snapshot includes immutable branch/sales-point/terminal authority. The browser never supplies trusted topology IDs.
+## Preview boundary
 
-Credentialless `place_pos_order(jsonb)` is not executable by authenticated users.
+Preview staff/topology/shift/inventory/loyalty/payment/reporting values are demonstration-only. They cannot authorize live APIs or become database foreign keys/commercial state.
 
-## Customer placement contrast
+## Validation
 
-Customer Flutter does not participate in terminal flow:
-
-```text
-customer selections
- -> quote_order
- -> place_customer_order
- -> backend derives customer/member + active default branch
- -> salesPointId/terminalId remain null
-```
-
-## Order queue/status
-
-```text
-GET /api/v1/orders
- -> BFF caller JWT
- -> backend branch scope
- -> Active / Scheduled / Ready / History projection
- -> periodic refetch
-
-staff next-state action + statusVersion
- -> POST /api/v1/orders/status
- -> transition_order_status
- -> branch authorization + legal transition + optimistic version check
- -> order event + updated snapshot
-```
-
-Backend `prepareAt`, `serverNow` and `scheduleState` remain operational scheduling authority. No React timer changes persisted order state.
-
-## Catalogue propagation
-
-```text
-Admin catalogue mutation
- -> Supabase
- -> catalogue_revision bump
- -> customer/POS invalidate and refetch
-```
-
-Preview catalogue data cannot override live catalogue state.
-
-## Customer order propagation
-
-```text
-staff fulfilment transition
- -> orders change
- -> owner-scoped Realtime invalidation
- -> customer authorized refetch
-```
-
-Dashboard employee flows do not expose employee JWT for direct Realtime.
-
-## Payment boundary
-
-There is no trusted processor/settlement state. Current flow remains explicit pay-at-counter/unpaid semantics.
-
-## Phase 1 validation
-
-```text
-Dashboard CI #23              PASS — 31 files / 150 tests
-Backend database audit #22   PASS — all four SQL suites
-Customer release audit #114  PASS
-```
-
-Detailed evidence: `docs/context/PHASE_1_OPERATIONAL_TOPOLOGY_CLOSEOUT_2026-09-11.md`.
-
-## Deferred flows
-
-- shift/cash open/lock/close and variance;
-- employee provisioning/role/badge/PIN lifecycle;
-- branch hours/closures/capacity/customer branch selection;
-- inventory/recipes/depletion;
-- loyalty/rewards;
-- promotions;
-- tax/accounting/reporting;
-- payment/refunds;
-- printer/KDS/payment-device integrations;
-- delivery/hosted production.
+Dashboard CI #126 passed lint, typecheck, unit tests, blocking live-POS browser authority regression and production build. Backend #190 and customer #281 are also complete.
