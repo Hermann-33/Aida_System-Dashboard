@@ -36,7 +36,8 @@ const customerBase = {
   salesPointId: null, salesPoint: null, terminalId: null, terminal: null, shiftId: null,
   tenderType: 'unpaid', paymentState: 'unpaid', paidAt: null,
   fulfillmentType: 'scheduled', serverNow: '2026-08-20T14:00:00Z', statusVersion: 3,
-  currency: 'MYR', pricingVersion: 1, subtotalSen: 1200, discountSen: 0, totalSen: 1200, voucher: null,
+  currency: 'MYR', pricingVersion: 1, subtotalSen: 1200,
+  voucherDiscountSen: 0, promotionDiscountSen: 0, discountSen: 0, totalSen: 1200, voucher: null, promotions: [],
   createdAt: '2026-08-20T12:00:00Z', updatedAt: '2026-08-20T12:00:00Z', statusUpdatedAt: '2026-08-20T12:00:00Z',
   preparingAt: null, readyAt: null, completedAt: null, cancelledAt: null, lines: [baseLine],
 };
@@ -105,6 +106,7 @@ test.describe('Preview closure gate (no backend)', () => {
     await expect(page.getByRole('table')).toBeVisible();
     await page.goto('/admin/rewards/campaigns');
     await expect(page.getByRole('heading', { name: /Marketing/i })).toBeVisible();
+    await expect(page.getByText(/sample campaigns.*no privileged backend requests/i)).toBeVisible();
     await page.getByRole('tab', { name: /Ads & banners/i }).click();
     await expect(page.getByRole('heading', { name: /Placement preview/i })).toBeVisible();
   });
@@ -163,7 +165,7 @@ test.describe('Preview closure gate (no backend)', () => {
     await expect(page.getByText('#100013')).toBeVisible();
   });
 
-  test('authoritative POS quote, placement and status UI consume Phase 6 commercial fields', async ({ page }) => {
+  test('authoritative POS quote, placement and status UI consume Phase 7 commercial fields', async ({ page }) => {
     const itemId = '11111111-1111-4111-8111-111111111111';
     const orderLine = { ...baseLine, itemId, basePriceSen: 1450, unitPriceSen: 1450, lineTotalSen: 1450 };
     const order = {
@@ -175,7 +177,8 @@ test.describe('Preview closure gate (no backend)', () => {
       tenderType: 'cash', paymentState: 'paid', paidAt: '2026-08-14T00:00:00Z',
       fulfillmentType: 'asap', requestedPickupAt: null, prepareAt: null, serverNow: '2026-08-14T00:00:00Z', scheduleState: null,
       status: 'confirmed', statusVersion: 1, currency: 'MYR', pricingVersion: 1,
-      subtotalSen: 1450, discountSen: 0, totalSen: 1450, voucher: null,
+      subtotalSen: 1450, voucherDiscountSen: 0, promotionDiscountSen: 100, discountSen: 100, totalSen: 1350, voucher: null,
+      promotions: [{ code: 'P7_TEST', name: 'Phase 7 Test', discountType: 'fixed', discountValue: 100, discountSen: 100, priority: 10, stackingMode: 'exclusive', allowWithVoucher: true, appliedAt: '2026-08-14T00:00:00Z' }],
       createdAt: '2026-08-14T00:00:00Z', updatedAt: '2026-08-14T00:00:00Z', statusUpdatedAt: '2026-08-14T00:00:00Z',
       preparingAt: null, readyAt: null, completedAt: null, cancelledAt: null, lines: [orderLine],
     };
@@ -185,7 +188,7 @@ test.describe('Preview closure gate (no backend)', () => {
     await page.route('**/api/v1/orders/policy', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ serverNow: '2026-08-14T00:00:00Z', timezone: 'Asia/Kuala_Lumpur', scheduleEnabled: true, minimumLeadMinutes: 15, preparationLeadMinutes: 15, slotIntervalMinutes: 15, maximumAdvanceDays: 7 }) }));
     await page.route('**/api/v1/orders/quote', async (route) => {
       quotePayload = route.request().postDataJSON();
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ pricingVersion: 1, currency: 'MYR', subtotalSen: 1450, discountSen: 0, totalSen: 1450, voucher: null, fulfillmentType: 'asap', requestedPickupAt: null, serverNow: '2026-08-14T00:00:00Z', schedulePolicy: { timezone: 'Asia/Kuala_Lumpur', scheduleEnabled: true, minimumLeadMinutes: 15, preparationLeadMinutes: 15, slotIntervalMinutes: 15, maximumAdvanceDays: 7 }, lines: [orderLine] }) });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ pricingVersion: 1, currency: 'MYR', subtotalSen: 1450, voucherDiscountSen: 0, promotionDiscountSen: 100, discountSen: 100, totalSen: 1350, voucher: null, promotions: [{ id: 'promotion-1', code: 'P7_TEST', name: 'Phase 7 Test', discountType: 'fixed', discountValue: 100, discountSen: 100, priority: 10, stackingMode: 'exclusive', allowWithVoucher: true }], fulfillmentType: 'asap', requestedPickupAt: null, serverNow: '2026-08-14T00:00:00Z', schedulePolicy: { timezone: 'Asia/Kuala_Lumpur', scheduleEnabled: true, minimumLeadMinutes: 15, preparationLeadMinutes: 15, slotIntervalMinutes: 15, maximumAdvanceDays: 7 }, lines: [orderLine] }) });
     });
     await page.route('**/api/v1/orders/place', (route) => route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(order) }));
     await page.route(/\/api\/v1\/orders\?.*/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([order]) }));
@@ -201,10 +204,12 @@ test.describe('Preview closure gate (no backend)', () => {
     await page.getByRole('button', { name: /add to order/i }).click();
     await page.getByRole('button', { name: /review & place/i }).click();
     await page.getByRole('button', { name: /review authoritative total/i }).click();
-    await expect(page.getByText('RM 14.50')).toBeVisible();
-    expect(JSON.stringify(quotePayload)).not.toMatch(/price|total|name|member|status/i);
+    await expect(page.getByText('RM 13.50')).toBeVisible();
+    await expect(page.getByText(/Promotion · Phase 7 Test · −RM 1.00/i)).toBeVisible();
+    expect(JSON.stringify(quotePayload)).not.toMatch(/price|total|name|member|status|promotion/i);
     await page.getByRole('button', { name: /place order/i }).click();
     await expect(page.getByRole('heading', { name: /order #100031/i })).toBeVisible();
+    await expect(page.getByText(/Promotion · Phase 7 Test · −RM 1.00/i)).toBeVisible();
     await page.getByRole('button', { name: /^orders$/i }).click();
     await expect(page.getByText('#100031', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: /start preparing/i }).click();
