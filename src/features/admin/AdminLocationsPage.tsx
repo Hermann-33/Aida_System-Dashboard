@@ -1,6 +1,13 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Plus } from 'lucide-react';
 import { PREVIEW_ORG } from '../../preview/fixtures/catalog';
+import { isUiPreviewMode } from '../../preview/uiPreviewMode';
+import {
+  fetchOperationalLocations,
+  saveOperationalBranch,
+  saveOperationalSalesPoint,
+  type OperationalBranch,
+} from '../locations/operationalLocationClient';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdminPageShell } from './AdminPageShell';
 import './admin.css';
@@ -12,34 +19,86 @@ type SalesPointState = {
   name: string;
   code: string;
   terminals: string[];
-  inventory: string;
+  active: boolean;
+  inventory?: string;
 };
 
 type BranchState = {
   id: string;
   name: string;
   code: string;
-  status: 'open' | 'closed';
-  hours: string;
+  active: boolean;
+  isDefault: boolean;
+  timezone: string;
+  hours?: string;
   orderTypes: string[];
   salesPoints: SalesPointState[];
 };
 
 const ORDER_TYPE_OPTIONS = ['Dine-in', 'Takeaway', 'Pickup'];
 
-const INITIAL_BRANCHES: BranchState[] = PREVIEW_ORG.branches.map((b) => ({ ...b }));
+const INITIAL_BRANCHES: BranchState[] = PREVIEW_ORG.branches.map((branch) => ({
+  id: branch.id,
+  name: branch.name,
+  code: branch.code,
+  active: branch.status === 'open',
+  isDefault: branch.id === PREVIEW_ORG.branches[0]?.id,
+  timezone: 'Asia/Kuala_Lumpur',
+  hours: branch.hours,
+  orderTypes: branch.orderTypes,
+  salesPoints: branch.salesPoints.map((salesPoint) => ({
+    id: salesPoint.id,
+    name: salesPoint.name,
+    code: salesPoint.code,
+    terminals: salesPoint.terminals,
+    active: true,
+    inventory: salesPoint.inventory,
+  })),
+}));
+
+function mapLiveBranches(branches: OperationalBranch[]): BranchState[] {
+  return branches.map((branch) => ({
+    id: branch.id,
+    name: branch.name,
+    code: branch.code,
+    active: branch.isActive,
+    isDefault: branch.isDefault,
+    timezone: branch.timezone,
+    orderTypes: [],
+    salesPoints: branch.salesPoints.map((salesPoint) => ({
+      id: salesPoint.id,
+      name: salesPoint.name,
+      code: salesPoint.code,
+      terminals: salesPoint.terminals.map((terminal) => terminal.code),
+      active: salesPoint.isActive,
+    })),
+  }));
+}
 
 type BranchForm = {
   id: string | null;
   name: string;
   code: string;
+  timezone: string;
   hours: string;
   orderTypes: string[];
 };
 
-const EMPTY_BRANCH_FORM: BranchForm = { id: null, name: '', code: '', hours: '', orderTypes: ['Dine-in'] };
+const EMPTY_BRANCH_FORM: BranchForm = {
+  id: null,
+  name: '',
+  code: '',
+  timezone: 'Asia/Kuala_Lumpur',
+  hours: '',
+  orderTypes: ['Dine-in'],
+};
 
-type SalesPointForm = { name: string; code: string; terminals: string; inventory: string };
+type SalesPointForm = {
+  name: string;
+  code: string;
+  terminals: string;
+  inventory: string;
+};
 
 const emptySalesPointForm = (): SalesPointForm => ({
   name: '',
@@ -48,26 +107,39 @@ const emptySalesPointForm = (): SalesPointForm => ({
   inventory: PREVIEW_ORG.inventoryCode,
 });
 
-/** Branches and Sales Points used to be two separate pages showing
- * overlapping information (every branch card already lists its own sales
- * points) — merged into one page: a per-branch overview, and a flat
- * cross-branch directory for quick scanning once there's more than one
- * branch to compare. */
 export function AdminLocationsPage() {
+  const preview = isUiPreviewMode();
   const [tab, setTab] = useState<Tab>('overview');
-  const [branches, setBranches] = useState<BranchState[]>(INITIAL_BRANCHES);
-
+  const [branches, setBranches] = useState<BranchState[]>(
+    preview ? INITIAL_BRANCHES : [],
+  );
   const [branchDialogOpen, setBranchDialogOpen] = useState(false);
   const [branchForm, setBranchForm] = useState<BranchForm>(EMPTY_BRANCH_FORM);
-
   const [spBranchId, setSpBranchId] = useState<string | null>(null);
   const [spForm, setSpForm] = useState<SalesPointForm>(emptySalesPointForm());
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const directoryRows = branches.flatMap((b) =>
-    b.salesPoints.map((sp) => ({
-      branch: b.name,
-      branchCode: b.code,
-      ...sp,
+  async function loadLive() {
+    if (preview) return;
+    setError('');
+    try {
+      setBranches(mapLiveBranches(await fetchOperationalLocations()));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to load locations');
+    }
+  }
+
+  useEffect(() => {
+    void loadLive();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preview]);
+
+  const directoryRows = branches.flatMap((branch) =>
+    branch.salesPoints.map((salesPoint) => ({
+      branch: branch.name,
+      branchCode: branch.code,
+      ...salesPoint,
     })),
   );
 
@@ -76,8 +148,15 @@ export function AdminLocationsPage() {
     setBranchDialogOpen(true);
   }
 
-  function openEditBranch(b: BranchState) {
-    setBranchForm({ id: b.id, name: b.name, code: b.code, hours: b.hours, orderTypes: b.orderTypes });
+  function openEditBranch(branch: BranchState) {
+    setBranchForm({
+      id: branch.id,
+      name: branch.name,
+      code: branch.code,
+      timezone: branch.timezone,
+      hours: branch.hours ?? '',
+      orderTypes: branch.orderTypes,
+    });
     setBranchDialogOpen(true);
   }
 
@@ -86,48 +165,112 @@ export function AdminLocationsPage() {
   }
 
   function toggleOrderType(value: string) {
-    setBranchForm((f) => ({
-      ...f,
-      orderTypes: f.orderTypes.includes(value)
-        ? f.orderTypes.filter((v) => v !== value)
-        : [...f.orderTypes, value],
+    setBranchForm((form) => ({
+      ...form,
+      orderTypes: form.orderTypes.includes(value)
+        ? form.orderTypes.filter((item) => item !== value)
+        : [...form.orderTypes, value],
     }));
   }
 
-  function toggleBranchStatus(id: string) {
-    setBranches((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, status: b.status === 'open' ? 'closed' : 'open' } : b)),
-    );
+  async function toggleBranchStatus(branch: BranchState) {
+    if (preview) {
+      setBranches((previous) =>
+        previous.map((item) =>
+          item.id === branch.id ? { ...item, active: !item.active } : item,
+        ),
+      );
+      return;
+    }
+
+    if (branch.isDefault && branch.active) {
+      setError('The default branch cannot be deactivated. Set another active branch as default first.');
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+    try {
+      await saveOperationalBranch({
+        id: branch.id,
+        name: branch.name,
+        code: branch.code,
+        timezone: branch.timezone,
+        isActive: !branch.active,
+        isDefault: branch.isDefault,
+      });
+      await loadLive();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to update branch');
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function handleBranchSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleBranchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     const name = branchForm.name.trim();
     const code = branchForm.code.trim().toUpperCase();
     if (!name || !code) return;
 
-    if (branchForm.id) {
-      const id = branchForm.id;
-      setBranches((prev) =>
-        prev.map((b) =>
-          b.id === id
-            ? { ...b, name, code, hours: branchForm.hours.trim(), orderTypes: branchForm.orderTypes }
-            : b,
-        ),
-      );
-    } else {
-      const newBranch: BranchState = {
-        id: `custom-${code.toLowerCase()}-${branches.length}`,
+    if (preview) {
+      if (branchForm.id) {
+        const id = branchForm.id;
+        setBranches((previous) =>
+          previous.map((branch) =>
+            branch.id === id
+              ? {
+                  ...branch,
+                  name,
+                  code,
+                  timezone: branchForm.timezone,
+                  hours: branchForm.hours.trim(),
+                  orderTypes: branchForm.orderTypes,
+                }
+              : branch,
+          ),
+        );
+      } else {
+        setBranches((previous) => [
+          ...previous,
+          {
+            id: `custom-${code.toLowerCase()}-${previous.length}`,
+            name,
+            code,
+            active: true,
+            isDefault: false,
+            timezone: branchForm.timezone,
+            hours: branchForm.hours.trim() || '07:00–22:00 MYT',
+            orderTypes: branchForm.orderTypes,
+            salesPoints: [],
+          },
+        ]);
+      }
+      closeBranchDialog();
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+    try {
+      const existing = branchForm.id
+        ? branches.find((branch) => branch.id === branchForm.id)
+        : null;
+      await saveOperationalBranch({
+        ...(branchForm.id ? { id: branchForm.id } : {}),
         name,
         code,
-        status: 'open',
-        hours: branchForm.hours.trim() || '07:00–22:00 MYT',
-        orderTypes: branchForm.orderTypes,
-        salesPoints: [],
-      };
-      setBranches((prev) => [...prev, newBranch]);
+        timezone: branchForm.timezone.trim() || 'Asia/Kuala_Lumpur',
+        isActive: existing?.active ?? true,
+        isDefault: existing?.isDefault ?? false,
+      });
+      closeBranchDialog();
+      await loadLive();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to save branch');
+    } finally {
+      setBusy(false);
     }
-    closeBranchDialog();
   }
 
   function openAddSalesPoint(branchId: string) {
@@ -139,97 +282,155 @@ export function AdminLocationsPage() {
     setSpBranchId(null);
   }
 
-  function handleSalesPointSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleSalesPointSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     const name = spForm.name.trim();
     const code = spForm.code.trim().toUpperCase();
     if (!name || !code || !spBranchId) return;
 
-    const newSalesPoint: SalesPointState = {
-      id: `custom-sp-${code.toLowerCase()}`,
-      name,
-      code,
-      terminals: spForm.terminals
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean),
-      inventory: spForm.inventory.trim() || PREVIEW_ORG.inventoryCode,
-    };
-    setBranches((prev) =>
-      prev.map((b) => (b.id === spBranchId ? { ...b, salesPoints: [...b.salesPoints, newSalesPoint] } : b)),
-    );
-    closeSalesPointDialog();
+    if (preview) {
+      const newSalesPoint: SalesPointState = {
+        id: `custom-sp-${code.toLowerCase()}`,
+        name,
+        code,
+        terminals: spForm.terminals
+          .split(',')
+          .map((terminal) => terminal.trim())
+          .filter(Boolean),
+        active: true,
+        inventory: spForm.inventory.trim() || PREVIEW_ORG.inventoryCode,
+      };
+      setBranches((previous) =>
+        previous.map((branch) =>
+          branch.id === spBranchId
+            ? { ...branch, salesPoints: [...branch.salesPoints, newSalesPoint] }
+            : branch,
+        ),
+      );
+      closeSalesPointDialog();
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+    try {
+      await saveOperationalSalesPoint({
+        branchId: spBranchId,
+        name,
+        code,
+        isActive: true,
+      });
+      closeSalesPointDialog();
+      await loadLive();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to save sales point');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <AdminPageShell
       pageId="admin-locations"
       title="Locations"
-      hint={`Organisation ${PREVIEW_ORG.organisation} · inventory code ${PREVIEW_ORG.inventoryCode} shared.`}
+      hint={
+        preview
+          ? `Organisation ${PREVIEW_ORG.organisation} · inventory code ${PREVIEW_ORG.inventoryCode} shared.`
+          : 'Trusted branches and sales points. Hours/capacity are Phase 4; inventory pools are Phase 5.'
+      }
       actions={
-        <button type="button" className="btn-primary" onClick={openAddBranch}>
+        <button type="button" className="btn-primary" onClick={openAddBranch} disabled={busy}>
           <Plus size={16} aria-hidden="true" />
           Add branch
         </button>
       }
     >
-      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
+      {error && <p className="form-hint" role="alert">{error}</p>}
+
+      <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="directory">Sales point directory</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
-          <article className="org-card">
-            <h2 className="admin-section-title">{PREVIEW_ORG.organisation}</h2>
-            <p className="form-hint">Master inventory relationship: {PREVIEW_ORG.inventoryCode}</p>
-          </article>
+          {preview && (
+            <article className="org-card">
+              <h2 className="admin-section-title">{PREVIEW_ORG.organisation}</h2>
+              <p className="form-hint">
+                Master inventory relationship: {PREVIEW_ORG.inventoryCode}
+              </p>
+            </article>
+          )}
 
-          {branches.map((b) => (
-            <article key={b.id} className="branch-card">
+          {branches.map((branch) => (
+            <article key={branch.id} className="branch-card">
               <header>
                 <h2 className="admin-section-title">
-                  {b.name} <span className="branch-code">{b.code}</span>
+                  {branch.name} <span className="branch-code">{branch.code}</span>
                 </h2>
-                <span className={`status-pill status-pill--${b.status === 'open' ? 'ok' : 'info'}`}>{b.status}</span>
+                <span className={`status-pill status-pill--${branch.active ? 'ok' : 'info'}`}>
+                  {preview ? (branch.active ? 'open' : 'closed') : (branch.active ? 'active' : 'inactive')}
+                </span>
               </header>
-              <p>Hours {b.hours}</p>
-              <p>Order types: {b.orderTypes.length ? b.orderTypes.join(', ') : '—'}</p>
+
+              {preview ? (
+                <>
+                  <p>Hours {branch.hours}</p>
+                  <p>Order types: {branch.orderTypes.length ? branch.orderTypes.join(', ') : '—'}</p>
+                </>
+              ) : (
+                <p>Timezone {branch.timezone}{branch.isDefault ? ' · default branch' : ''}</p>
+              )}
+
               <table className="data-table admin-table">
                 <thead>
                   <tr>
                     <th>Sales point</th>
                     <th>Code</th>
+                    <th>Status</th>
                     <th>Terminals</th>
-                    <th>Inventory</th>
+                    {preview && <th>Inventory</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {b.salesPoints.map((sp) => (
-                    <tr key={sp.id}>
-                      <td>{sp.name}</td>
-                      <td>{sp.code}</td>
-                      <td>{sp.terminals.length ? sp.terminals.join(', ') : '—'}</td>
-                      <td>{sp.inventory}</td>
+                  {branch.salesPoints.map((salesPoint) => (
+                    <tr key={salesPoint.id}>
+                      <td>{salesPoint.name}</td>
+                      <td>{salesPoint.code}</td>
+                      <td>{salesPoint.active ? 'Active' : 'Inactive'}</td>
+                      <td>{salesPoint.terminals.length ? salesPoint.terminals.join(', ') : '—'}</td>
+                      {preview && <td>{salesPoint.inventory}</td>}
                     </tr>
                   ))}
-                  {b.salesPoints.length === 0 && (
+                  {branch.salesPoints.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="empty-state">
+                      <td colSpan={preview ? 5 : 4} className="empty-state">
                         No sales points yet.
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
+
               <div className="admin-row-actions branch-card__actions">
-                <button type="button" className="btn-secondary btn-sm" onClick={() => openEditBranch(b)}>
+                <button type="button" className="btn-secondary btn-sm" onClick={() => openEditBranch(branch)}>
                   Edit branch
                 </button>
-                <button type="button" className="btn-secondary btn-sm" onClick={() => toggleBranchStatus(b.id)}>
-                  {b.status === 'open' ? 'Close branch' : 'Reopen branch'}
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  onClick={() => void toggleBranchStatus(branch)}
+                  disabled={busy || (!preview && branch.isDefault && branch.active)}
+                >
+                  {branch.active ? (preview ? 'Close branch' : 'Deactivate') : (preview ? 'Reopen branch' : 'Reactivate')}
                 </button>
-                <button type="button" className="btn-secondary btn-sm" onClick={() => openAddSalesPoint(b.id)}>
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  onClick={() => openAddSalesPoint(branch.id)}
+                  disabled={busy || !branch.active}
+                >
                   Add sales point
                 </button>
               </div>
@@ -245,8 +446,9 @@ export function AdminLocationsPage() {
                 <th>Branch</th>
                 <th>Sales point</th>
                 <th>Code</th>
+                <th>Status</th>
                 <th>Terminals</th>
-                <th>Inventory pool</th>
+                {preview && <th>Inventory pool</th>}
               </tr>
             </thead>
             <tbody>
@@ -257,15 +459,18 @@ export function AdminLocationsPage() {
                   </td>
                   <td>{row.name}</td>
                   <td>{row.code}</td>
+                  <td>{row.active ? 'Active' : 'Inactive'}</td>
                   <td>{row.terminals.length ? row.terminals.join(', ') : '—'}</td>
-                  <td>{row.inventory}</td>
+                  {preview && <td>{row.inventory}</td>}
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="form-hint" role="note">
-            Branches and sales points added here exist in this browser session only — no location API yet.
-          </p>
+          {!preview && (
+            <p className="form-hint" role="note">
+              Opening hours, closures, capacity and inventory relationships are intentionally not inferred here.
+            </p>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -275,18 +480,17 @@ export function AdminLocationsPage() {
             className="confirm-dialog confirm-dialog--wide"
             role="dialog"
             aria-labelledby="branch-dialog-title"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
             <h2 id="branch-dialog-title" className="admin-section-title">
               {branchForm.id ? 'Edit branch' : 'Add branch'}
             </h2>
-            <p className="form-hint">Session preview only — no location API yet.</p>
             <form className="admin-form" onSubmit={handleBranchSubmit}>
               <label>
                 Branch name
                 <input
                   value={branchForm.name}
-                  onChange={(e) => setBranchForm((f) => ({ ...f, name: e.target.value }))}
+                  onChange={(event) => setBranchForm((form) => ({ ...form, name: event.target.value }))}
                   required
                   autoFocus
                 />
@@ -295,41 +499,55 @@ export function AdminLocationsPage() {
                 Branch code
                 <input
                   value={branchForm.code}
-                  onChange={(e) => setBranchForm((f) => ({ ...f, code: e.target.value }))}
+                  onChange={(event) => setBranchForm((form) => ({ ...form, code: event.target.value }))}
                   placeholder="BR-XXXX"
                   required
                 />
               </label>
-              <label>
-                Hours
-                <input
-                  value={branchForm.hours}
-                  onChange={(e) => setBranchForm((f) => ({ ...f, hours: e.target.value }))}
-                  placeholder="07:00–22:00 MYT"
-                />
-              </label>
-              <div>
-                <span className="form-hint" id="order-types-label">
-                  Order types
-                </span>
-                <div className="admin-row-actions" role="group" aria-labelledby="order-types-label">
-                  {ORDER_TYPE_OPTIONS.map((opt) => (
-                    <label key={opt} className="admin-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={branchForm.orderTypes.includes(opt)}
-                        onChange={() => toggleOrderType(opt)}
-                      />
-                      {opt}
-                    </label>
-                  ))}
-                </div>
-              </div>
+
+              {preview ? (
+                <>
+                  <label>
+                    Hours
+                    <input
+                      value={branchForm.hours}
+                      onChange={(event) => setBranchForm((form) => ({ ...form, hours: event.target.value }))}
+                      placeholder="07:00–22:00 MYT"
+                    />
+                  </label>
+                  <div>
+                    <span className="form-hint" id="order-types-label">Order types</span>
+                    <div className="admin-row-actions" role="group" aria-labelledby="order-types-label">
+                      {ORDER_TYPE_OPTIONS.map((option) => (
+                        <label key={option} className="admin-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={branchForm.orderTypes.includes(option)}
+                            onChange={() => toggleOrderType(option)}
+                          />
+                          {option}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <label>
+                  IANA timezone
+                  <input
+                    value={branchForm.timezone}
+                    onChange={(event) => setBranchForm((form) => ({ ...form, timezone: event.target.value }))}
+                    placeholder="Asia/Kuala_Lumpur"
+                    required
+                  />
+                </label>
+              )}
+
               <div className="confirm-dialog__actions">
                 <button type="button" className="btn-secondary" onClick={closeBranchDialog}>
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary">
+                <button type="submit" className="btn-primary" disabled={busy}>
                   {branchForm.id ? 'Save changes' : 'Add branch'}
                 </button>
               </div>
@@ -344,18 +562,15 @@ export function AdminLocationsPage() {
             className="confirm-dialog"
             role="dialog"
             aria-labelledby="sp-dialog-title"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
-            <h2 id="sp-dialog-title" className="admin-section-title">
-              Add sales point
-            </h2>
-            <p className="form-hint">Session preview only — no location API yet.</p>
+            <h2 id="sp-dialog-title" className="admin-section-title">Add sales point</h2>
             <form className="admin-form" onSubmit={handleSalesPointSubmit}>
               <label>
                 Name
                 <input
                   value={spForm.name}
-                  onChange={(e) => setSpForm((f) => ({ ...f, name: e.target.value }))}
+                  onChange={(event) => setSpForm((form) => ({ ...form, name: event.target.value }))}
                   required
                   autoFocus
                 />
@@ -364,31 +579,35 @@ export function AdminLocationsPage() {
                 Code
                 <input
                   value={spForm.code}
-                  onChange={(e) => setSpForm((f) => ({ ...f, code: e.target.value }))}
+                  onChange={(event) => setSpForm((form) => ({ ...form, code: event.target.value }))}
                   placeholder="SP-XXXX"
                   required
                 />
               </label>
-              <label>
-                Terminals (comma-separated)
-                <input
-                  value={spForm.terminals}
-                  onChange={(e) => setSpForm((f) => ({ ...f, terminals: e.target.value }))}
-                  placeholder="POS-XXXX-01"
-                />
-              </label>
-              <label>
-                Inventory pool
-                <input
-                  value={spForm.inventory}
-                  onChange={(e) => setSpForm((f) => ({ ...f, inventory: e.target.value }))}
-                />
-              </label>
+              {preview && (
+                <>
+                  <label>
+                    Terminals (comma-separated)
+                    <input
+                      value={spForm.terminals}
+                      onChange={(event) => setSpForm((form) => ({ ...form, terminals: event.target.value }))}
+                      placeholder="POS-XXXX-01"
+                    />
+                  </label>
+                  <label>
+                    Inventory pool
+                    <input
+                      value={spForm.inventory}
+                      onChange={(event) => setSpForm((form) => ({ ...form, inventory: event.target.value }))}
+                    />
+                  </label>
+                </>
+              )}
               <div className="confirm-dialog__actions">
                 <button type="button" className="btn-secondary" onClick={closeSalesPointDialog}>
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary">
+                <button type="submit" className="btn-primary" disabled={busy}>
                   Add sales point
                 </button>
               </div>
