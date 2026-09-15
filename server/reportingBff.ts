@@ -65,16 +65,19 @@ function reportFilter(request: Request): Record<string, unknown> {
     fromDate: params.get('fromDate') ?? '',
     toDate: params.get('toDate') ?? '',
   };
-  for (const [queryKey, filterKey] of [['branchId', 'branchId'], ['salesPointId', 'salesPointId']] as const) {
-    const value = params.get(queryKey);
-    if (value) filter[filterKey] = value;
+  const branchId = params.get('branchId');
+  if (branchId) filter.branchId = branchId;
+  const salesPointId = params.get('salesPointId');
+  if (salesPointId) filter.salesPointId = salesPointId;
+  const pageSize = params.get('pageSize');
+  if (pageSize !== null && pageSize !== '') {
+    const parsed = Number(pageSize);
+    if (Number.isSafeInteger(parsed) && parsed >= 0) filter.pageSize = parsed;
   }
-  for (const [queryKey, filterKey] of [['pageSize', 'pageSize'], ['offset', 'offset']] as const) {
-    const value = params.get(queryKey);
-    if (value !== null && value !== '') {
-      const parsed = Number(value);
-      if (Number.isSafeInteger(parsed) && parsed >= 0) filter[filterKey] = parsed;
-    }
+  const offset = params.get('offset');
+  if (offset !== null && offset !== '') {
+    const parsed = Number(offset);
+    if (Number.isSafeInteger(parsed) && parsed >= 0) filter.offset = parsed;
   }
   return filter;
 }
