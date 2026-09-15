@@ -29,7 +29,8 @@ function fixture(status: OrderSnapshot['status'] = 'confirmed'): OrderSnapshot {
     shiftId: null, tenderType: 'unpaid', paymentState: 'unpaid', paidAt: null,
     fulfillmentType: 'asap', requestedPickupAt: null, prepareAt: null,
     serverNow: '2026-08-14T00:30:00Z', scheduleState: null, status, statusVersion: 4, currency: 'MYR', pricingVersion: 1,
-    subtotalSen: 1450, totalSen: 1450, createdAt: '2026-08-14T00:00:00Z', updatedAt: '2026-08-14T00:00:00Z',
+    subtotalSen: 1450, discountSen: 0, totalSen: 1450, voucher: null,
+    createdAt: '2026-08-14T00:00:00Z', updatedAt: '2026-08-14T00:00:00Z',
     statusUpdatedAt: '2026-08-14T00:00:00Z', preparingAt: null, readyAt: null, completedAt: null, cancelledAt: null,
     lines: [{
       id: 'line-1', lineNumber: 1, itemId: 'item-1', sku: 'CF-LAT', name: 'Latte', prepRoute: 'bar',
