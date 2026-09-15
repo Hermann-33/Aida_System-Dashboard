@@ -1,51 +1,73 @@
-# POS/Admin Dashboard Audit
+# Dashboard Audit
 
 Updated: 2026-09-15
 
-## Current verdict
+**Current verdict:** Dashboard implementation is `COMPLETE` through Phase 7 against the defined runtime/security/CI boundary. This document describes current state; older dated audit records remain historical evidence only.
 
-`COMPLETE` through Phase 6. Live Dashboard authority now covers operational topology, shifts/cash, branch scheduling, inventory/recipes, Admin loyalty management and shift-bound POS member/voucher use. Valid Phase 1–3 Codex findings affecting Dashboard authority are remediated.
+## Trusted architecture
 
-## Trusted live surfaces
+Dashboard/Admin/POS uses a same-origin BFF over the shared Supabase backend. Employee access/refresh and terminal credentials remain HttpOnly/server-side. The BFF forwards the caller JWT and publishable key so Supabase role/RLS/RPC checks remain authoritative. No normal live path uses a service-role credential or exposes reusable employee/terminal secrets to browser JavaScript.
 
-- same-origin employee/Admin authentication/session BFF with HttpOnly cookies;
-- trusted role/disabled state and employee branch assignments;
-- branches, sales points, terminals, enrolment/revocation and server-held terminal credential;
-- live shift open/lock/resume/close, reconciliation and cash movements;
-- authoritative catalogue/quote/POS placement and versioned order transitions;
-- branch pickup policy/hours/exceptions/capacity administration;
-- inventory item, branch stock movement and recipe administration;
-- Admin/Owner loyalty program/reward/member-support operations;
-- POS member loyalty lookup bound to employee + enrolled terminal + open shift;
-- POS voucher/member intent routed through the authoritative order BFF;
-- blocking live-POS browser authority regression in CI.
+Preview fixtures are isolated and never silently replace failed live authority.
 
-The browser receives neither a service-role credential nor a readable employee/terminal secret. Preview data is never a live fallback.
+## Completed live surfaces
 
-## Validation
+- Phase 1: branches, employee branch scope, sales points, terminals, enrolment/revocation and POS topology attribution.
+- Phase 2: shift lifecycle, cash movements/reconciliation and open-shift order authority.
+- Phase 4: branch pickup configuration and capacity-aware ordering.
+- Phase 5: branch inventory, movements and recipe administration.
+- Phase 6: loyalty program/reward administration, member wallet/support adjustments, POS member lookup and voucher-aware orders.
+- Phase 7: live campaign/promotion administration, automatic server promotion evaluation and POS/order presentation of accepted promotion snapshots.
 
-Final implementation head before documentation closeout:
+Phase 3 customer deletion/privacy is primarily a customer/backend surface; Dashboard retained order views consume the resulting anonymised commercial history rather than restoring deleted customer identity.
 
-`9979df27ed663b779c3d5c79670de4f19367b01c`
+## Phase 7 audit result
 
-Dashboard CI #126:
+The Campaigns tab uses production BFF endpoints backed by `get_promotion_admin_state()` and `save_promotion(jsonb)`. Admin/Owner role and caller identity are revalidated server-side. Direct promotion-table access is revoked.
+
+Dashboard order contracts strictly parse:
 
 ```text
-lint                         COMPLETE
-typecheck                    COMPLETE
-unit tests                   COMPLETE
-live POS browser regression  COMPLETE
-production build             COMPLETE
+voucherDiscountSen
+promotionDiscountSen
+discountSen
+promotions[]
 ```
 
-Backend database audit #190 and Customer release audit #281 are also `COMPLETE`. Live AIDA Supabase Phase 6 deployment/security/performance checks are `COMPLETE`.
+and reject inconsistent commercial snapshots. POS does not submit accepted promotion authority; promotions are server-selected during quote/place.
 
-## Remediation result
+Live/preview regressions cover that preview mode does not contact privileged promotion endpoints and that live POS can render a promotion-only authoritative order/quote.
 
-Live POS/shift flows no longer rely on preview authority. Browser regression now exercises the live same-origin route boundary. New POS placement still requires open shift + terminal authority; matching persisted retries do not become duplicate orders after shift lock/close. Loyalty lookup fails closed without trusted terminal/open-shift context.
+## Exact validated implementation
 
-## Deferred
+```text
+Aida_System-Dashboard   7e14326253b263412da5fa38f47bb137c31d7379
+Dashboard CI #147       COMPLETE
+```
 
-Employee Auth-user provisioning/badge-PIN lifecycle, generalized promotions/discounts, reporting/accounting, external settlement/refunds, hardware integrations and deployment-heavy production operations remain later boundaries.
+Dashboard CI passed lint, TypeScript typecheck, unit tests, live POS browser authority regression, preview-isolation browser regression and production build.
 
-Phase PRs remain draft/unmerged; completion is not merge authorization.
+Cross-repo Phase 7 validation also passed:
+
+```text
+Aida_System             c6abf24b498edb401af878f86d26e1c63a633121
+Backend database audit #231   COMPLETE
+Customer release audit #311   COMPLETE
+```
+
+## Live backend evidence
+
+AIDA Supabase `eswovqxqzfevcdwwcmuh` is `ACTIVE_HEALTHY`. The three canonical Phase 7 migrations are deployed. All six promotion tables have RLS + FORCE RLS with direct anon/authenticated CRUD revoked. Required RPC/function grants are present, the old pending-voucher trigger is retired, and fresh advisors show no new blocking Phase 7 issue.
+
+The sole security WARN remains the pre-existing disabled leaked-password-protection Auth setting. Performance findings are INFO unused-index observations only.
+
+## Known later boundaries
+
+- Phase 8: authoritative reporting/accounting/audit data and exports.
+- Phase 9: external payment/refund/settlement integrations.
+- Phase 10: final production/App Store release gate.
+- separately deferred unless explicitly owned later: Badge/PIN provisioning and hardware integrations.
+
+## Governance
+
+Phase completion does not authorize merge. Phase 7 PRs remain draft/unmerged until the owner explicitly says otherwise. Current-state docs must be updated with each implementation batch; historical audit documents should not be used as runtime truth when a current closeout supersedes them.

@@ -1,66 +1,97 @@
-# POS/Admin State and Data Flow
+# Dashboard State and Data Flow
 
 Updated: 2026-09-15
 
-## Trusted employee/terminal boundary
+**Current live boundary:** Phases 1–7 `COMPLETE`.
+
+The Dashboard/Admin/POS application is a thin privileged client over the shared Supabase backend. Live privileged calls use the same-origin BFF; preview mode is presentation-only and isolated from privileged APIs.
+
+## Employee/session flow
 
 ```text
-employee login -> same-origin BFF -> Supabase Auth + trusted role/branch scope
- -> HttpOnly access/refresh cookies
-terminal enrolment -> server validation -> HttpOnly terminal credential
+browser login/employee action
+ -> same-origin BFF
+ -> Supabase Auth / caller-bound RPC
+ -> HttpOnly employee access + refresh cookies
+ -> trusted user_profile role/disabled-state checks
 ```
 
-React receives identity/status projections, not reusable bearer/terminal secrets.
+Browser JavaScript does not own reusable employee bearer tokens. Terminal credentials likewise remain HttpOnly/server-held.
 
-## Shift and POS boundary
+## Topology and shift flow
 
 ```text
-employee + terminal credential
- -> current/open shift BFF/RPC
- -> open | lock | resume | close / cash movements
- -> live POS quote/place
+Admin branch/sales-point/terminal UI
+ -> BFF -> caller-bound admin RPCs -> trusted topology
+
+POS request
+ -> server-held terminal credential
+ -> terminal context + employee branch scope
+ -> open shift requirement
+ -> POS order/cash authority
 ```
 
-New POS placement requires an open shift. Matching `clientRequestId` retries may resolve a persisted order after the original shift locks/closes only under current terminal/caller authority.
+A new POS order requires current employee/terminal authorization and an open shift. Matching idempotent retries can resolve an already accepted order without creating new shift authority.
 
-## Scheduling and inventory
+## Catalogue, scheduling and inventory
 
-Admin branch pickup configuration uses trusted BFF/RPCs. POS/customer quote consumes server branch schedule/capacity and inventory sufficiency. Placement is final inventory authority and performs transactional non-negative depletion. Dashboard Inventory uses live branch stock and recipe RPCs; Preview inventory is separate.
+Catalogue reads/writes use the shared canonical catalogue. Branch pickup configuration owns timezone, windows/exceptions, lead/horizon/slot interval and capacity. Inventory administration owns branch stock, recipes and movements.
 
-## Loyalty Admin flow
+POS quote/place does not calculate accepted prices, pickup capacity or stock outcome in the browser. Supabase validates and returns them.
+
+## Loyalty and voucher flow
 
 ```text
-Admin/Owner browser
- -> same-origin loyalty BFF
- -> caller JWT
- -> loyalty admin/program/reward/member-support RPCs
- -> server-owned balances/config/rewards
+POS member intent / Admin loyalty support
+ -> BFF
+ -> caller-bound loyalty RPCs
+ -> member loyalty account / reward / voucher authority
+
+order quote/place with voucher intent
+ -> server validates ownership/status/expiry/eligibility
+ -> accepted voucher discount snapshot
+ -> one-time consumption at placement
 ```
 
-Adjustment results are server-derived and record actor/reason.
+Points, stamps, rewards and vouchers shown in live Dashboard flows come from trusted backend state. Preview fixtures do not become live loyalty authority.
 
-## POS member/voucher flow
+## Phase 7 promotion flow
 
 ```text
-employee session + HttpOnly terminal credential + open shift
- -> POS member-code lookup BFF
- -> minimal trusted wallet/voucher projection
- -> optional memberCode/voucherId intent
- -> authoritative quote
- -> authoritative place
- -> atomic voucher consumption + immutable discount snapshot
+/admin/rewards/campaigns
+ -> promotion BFF route
+ -> get_promotion_admin_state / save_promotion
+ -> server-owned promotion + scope tables
 ```
 
-Changing/removing the selected member or voucher invalidates the previous trusted quote.
+Admin/Owner can configure fixed/percentage offers, windows, subtotal/cap, priority, exclusive/stackable mode, voucher coexistence, member/usage limits and branch/product/variant/add-on scope.
 
-## Order/status propagation
+POS order flow:
 
-Dashboard list/detail/status uses BFF caller-JWT requests and trusted branch scope. Status mutations require legal transition + `statusVersion`. Customer Realtime remains invalidation followed by authorized refetch; Dashboard does not expose employee JWT for browser Realtime.
+```text
+cart/member/voucher intent
+ -> authoritative quote_order
+ -> schedule + stock + voucher validation
+ -> automatic promotion evaluation
+ -> voucherDiscountSen + promotionDiscountSen + discountSen + totalSen
+ -> POS presentation
 
-## Preview boundary
+place
+ -> deterministic promotion locks + full revalidation
+ -> accepted order
+ -> immutable voucher/promotion application snapshots
+```
 
-Preview staff/topology/shift/inventory/loyalty/payment/reporting values are demonstration-only. They cannot authorize live APIs or become database foreign keys/commercial state.
+The browser never submits an accepted promotion ID or authoritative promotion discount. A promotion shown on the accepted order is a server snapshot.
 
-## Validation
+## Order board and status
 
-Dashboard CI #126 passed lint, typecheck, unit tests, blocking live-POS browser authority regression and production build. Backend #190 and customer #281 are also complete.
+Order lists/snapshots are strict-parsed. Commercial arithmetic must reconcile before the UI trusts the payload. Staff status transitions use server authorization and expected `statusVersion`; display concepts such as due/overdue do not mutate persisted status.
+
+## Preview isolation
+
+Preview mode may provide deterministic fixtures for visual testing, but it must not call privileged live routes. Browser CI contains a blocking preview-isolation regression. Live mode must fail closed rather than silently substitute fixture authority.
+
+## Deferred flows
+
+Phase 8 will replace/extend reporting/accounting/audit presentation with trusted derived reports. Phase 9 owns external payment/refund/settlement integrations. Hardware and Badge/PIN lifecycle remain separately deferred. Phase 10 owns final release/App Store verification.
