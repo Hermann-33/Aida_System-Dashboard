@@ -32,16 +32,14 @@ const catalogue = {
     id: 'item-latte', categoryId: 'coffee', categoryName: 'Coffee', slug: 'latte', sku: 'CF-LAT',
     kind: 'product' as const, name: 'Latte', description: '', basePriceSen: 1450,
     isAvailable: true, isPublished: true, isFeatured: false, isBestSeller: false,
-    isStudentEligible: false, imageUrl: null, volumeMl: null, prepRoute: 'bar' as const,
-    sortOrder: 10, compatibleAddOnIds: [], variants: [],
+    isStudentEligible: false, isDrink: true, imageUrl: null, volumeMl: null, prepRoute: 'bar' as const,
+    sortOrder: 10, compatibleAddOnIds: [], variants: [], customizationGroups: [],
   }],
 };
 
 const branches = [{
   id: 'branch-main', code: 'BR-MAIN', name: 'Main Café', timezone: 'Asia/Kuala_Lumpur',
-  isActive: true, isDefault: true, addressLine1: null, addressLine2: null, city: null,
-  state: null, postcode: null, countryCode: 'MY', masterInventoryBranchId: null,
-  createdAt: '2026-09-15T00:00:00Z', updatedAt: '2026-09-15T00:00:00Z',
+  addressText: null, phone: null, isActive: true, isDefault: true, salesPoints: [],
 }];
 
 describe('AdminMarketingPage Phase 7 campaigns', () => {
