@@ -39,7 +39,8 @@ function responseCookies(response: Response): string[] {
 function accessFromSetCookie(cookies: string[]): string | null {
   for (const cookie of cookies) {
     const match = cookie.match(/(?:^|[, ]+)aida_employee_access=([^;,]+)/);
-    if (match?.[1]) return decodeURIComponent(match[1]);
+    const encodedToken = match?.[1];
+    if (encodedToken) return decodeURIComponent(encodedToken);
   }
   return null;
 }
@@ -70,7 +71,10 @@ function reportFilter(request: Request): Record<string, unknown> {
   }
   for (const [queryKey, filterKey] of [['pageSize', 'pageSize'], ['offset', 'offset']] as const) {
     const value = params.get(queryKey);
-    if (value !== null && value !== '') filter[filterKey] = Number(value);
+    if (value !== null && value !== '') {
+      const parsed = Number(value);
+      if (Number.isSafeInteger(parsed) && parsed >= 0) filter[filterKey] = parsed;
+    }
   }
   return filter;
 }
