@@ -32,6 +32,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     icon: Store,
     items: [
       { label: 'Locations', path: '/admin/operations/branches' },
+      { label: 'Pickup scheduling', path: '/admin/operations/pickup' },
       { label: 'Terminals', path: '/admin/operations/terminals' },
       { label: 'Shifts', path: '/admin/operations/shifts' },
       { label: 'Employees', path: '/admin/operations/employees' },

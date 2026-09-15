@@ -1,159 +1,86 @@
 # Active Context
 
-**As of:** 2026-08-23
-**Current task:** `TASK-MENU-CUSTOMIZATION-001 — per-drink option groups, per-line add-ons, Now terminology, and post-add navigation`
-**Current verdict:** COMPLETE — live Supabase catalogue/order customization authority is in place; Customer and Dashboard/POS integrations pass executable validation and UI/theme review; backend grants/RLS/advisors and canonical documentation are reconciled.
+**As of:** 2026-09-15  
+**Current boundary:** Phase 7 — promotions and discounts  
+**Current verdict:** `COMPLETE` against the defined Phase 7 implementation, live-deployment, advisor and documentation boundary. Phase 8–10 remain frozen until explicit owner authorization.
 
-Detailed closeout evidence:
+## Product topology
 
-- `docs/context/MENU_CUSTOMIZATION_2026-08-23.md`
+- customer/backend: `Hermann-33/Aida_System`
+- Dashboard/Admin/POS: `Hermann-33/Aida_System-Dashboard`
+- shared Supabase project: `Aida System`, ref `eswovqxqzfevcdwwcmuh`, region `ap-southeast-1`
+- canonical executable migrations: `Hermann-33/Aida_System/supabase/migrations/` only
 
-Previous scheduled-order operations work remains COMPLETE and is documented in:
-
-- `docs/context/SCHEDULED_ORDER_OPERATIONS_2026-08-20.md`
-
-## Current product reality
-
-AIDA Café is one product across the Flutter customer app, React Dashboard/Admin/POS and shared Supabase project `eswovqxqzfevcdwwcmuh`.
-
-The implemented trusted tranche now includes:
-
-- Supabase Auth/member provisioning;
-- protected same-origin employee/Admin sessions;
-- shared catalogue and revision invalidation;
-- catalogue-driven product variants, per-drink option groups and compatible add-ons;
-- authoritative quote/order pricing and immutable line snapshots;
-- Now/scheduled pickup and server-owned scheduled preparation classification;
-- customer history/status plus owner-scoped Realtime invalidation;
-- Dashboard POS ordering, operational queue and legal versioned status transitions;
-- the verified AIDA customer redesign and matching Dashboard theme integration.
-
-Frontends remain non-authoritative for identity, roles, catalogue commercial truth, modifier validity, pricing, order state, payment, loyalty, inventory or reporting.
-
-## Menu customization — live contract
-
-Standard drink groups are currently:
+## Authority completed through Phase 7
 
 ```text
-Temperature: Hot | Iced
-Sweetness: Regular | Less sweet | Least sweet
+Phase 1 COMPLETE  branch -> sales point -> terminal -> employee branch scope -> POS attribution
+Phase 2 COMPLETE  terminal + employee -> shift -> POS order / cash ledger
+Phase 3 COMPLETE  customer -> privacy/account deletion -> anonymized retained history
+Phase 4 COMPLETE  branch calendar/policy -> pickup capacity -> authoritative quote/place
+Phase 5 COMPLETE  recipe -> branch inventory -> transactional depletion/reversal
+Phase 6 COMPLETE  member -> loyalty -> reward/voucher -> authoritative voucher discount/consumption
+Phase 7 COMPLETE  promotion config -> server evaluation -> locked placement -> immutable promotion snapshots
 ```
 
-The groups are reusable server catalogue definitions. Per drink, Admin/Owner can configure customer label, price delta, availability and exactly one available default.
+Phase 7 keeps commercial authority on the server. Clients do not submit accepted promotion IDs, promotion discounts or totals. Active promotions are resolved from trusted configuration with branch/product/variant/add-on scope, windows, subtotal thresholds, member rules, usage limits, stacking and voucher-coexistence policy.
 
-Compatible add-ons remain catalogue items of kind `addon`, linked to individual products. Customer browsing hides add-on rows/categories as standalone products; the same add-on can be selected independently on one cart line and omitted from another.
+Accepted orders expose distinct `voucherDiscountSen` and `promotionDiscountSen` components that reconcile to `discountSen`. Placement serializes candidate promotion configuration/usage, and accepted promotion applications persist immutable commercial snapshots.
 
-Order intents now support:
+Dashboard promotion management remains behind the same-origin HttpOnly employee session/BFF and caller-JWT forwarding. Flutter and POS parse promotion authority fail-closed. Preview mode makes no privileged promotion requests.
+
+## Validated implementation heads
 
 ```text
-itemId
-variantId
-optionValueIds[]
-addOnIds[]
-quantity
-note
+Aida_System             c6abf24b498edb401af878f86d26e1c63a633121
+Aida_System-Dashboard   7e14326253b263412da5fa38f47bb137c31d7379
+Backend database audit #231   COMPLETE
+Customer release audit #311   COMPLETE
+Dashboard CI #147             COMPLETE
 ```
 
-Supabase revalidates all selected IDs and calculates authoritative price. `pricingVersion=2` includes option deltas. `order_line_options` stores immutable group/value/label/price snapshots.
+## Live Phase 7 deployment
 
-Older clients that omit option IDs are handled by the live quote function through each group's configured available default. Clients still must not submit trusted labels/prices/totals.
-
-## Customer behavior
-
-Customer-facing item configuration now presents Size, Temperature, Sweetness and compatible Customize/add-on controls from the catalogue. Unavailable options remain visible but disabled with explicit semantics; selected state is not color-only.
-
-`Add to cart` creates the configured line and immediately returns to Menu. Distinct Temperature/Sweetness/add-on combinations remain distinct cart configurations.
-
-Checkout terminology is `Now | Schedule`; only the customer-facing label changed. The wire/backend value remains `asap` for compatibility. The accepted tactile scheduling wheel still renders only policy-derived valid pickup slots.
-
-## Dashboard / POS behavior
-
-Admin Menu management exposes drink status plus per-option label, price delta, availability and default controls, along with compatible add-on checkboxes. Invalid required groups are rejected before save and by the backend.
-
-POS consumes the same catalogue contract:
-
-- variants: required single-choice when present;
-- Temperature/Sweetness: required single-choice;
-- add-ons: optional multi-select;
-- unavailable options: visible/disabled and not selectable.
-
-Order placement sends IDs/quantity/note/fulfilment intent only. Same-origin HttpOnly employee-session architecture and Admin/Owner authorization remain unchanged.
-
-## Live evidence
-
-Checked on 2026-08-23:
+Canonical repository migrations:
 
 ```text
-catalogue revision         130
-drink products              11
-non-drink products           4
-add-ons                      4
-invalid required groups      0
-Iced Drinks with Hot on      0
+20260915100000_create_promotion_discount_authority.sql
+20260915101000_integrate_promotions_with_order_authority.sql
+20260915101100_normalize_phase7_nullable_voucher_quote.sql
 ```
 
-Live migrations:
+Live Supabase applied-history entries created by the migration service on 2026-09-15:
 
-- `20260822135421_add_drink_customization_catalogue`
-- `20260822135602_integrate_drink_customizations_with_orders`
-- `20260822141814_harden_drink_customization_indexes_and_rls`
-- `20260822143542_grant_public_drink_customization_reads`
+```text
+20260915120917_create_promotion_discount_authority
+20260915121057_integrate_promotions_with_order_authority
+20260915121119_normalize_phase7_nullable_voucher_quote
+```
 
-Privilege checks confirm public catalogue/quote execution and intended option-table reads while ordinary authenticated users retain no direct `order_line_options` table read.
+These live timestamps map to the three canonical repository files above. Do not rewrite already-applied live migration history merely to match repository filename timestamps.
 
-Security advisor: one pre-existing WARN only — `auth_leaked_password_protection` / Leaked Password Protection Disabled. Performance findings are INFO-only unused indexes.
+Live verification after deployment:
 
-## Executable client evidence
+- project `eswovqxqzfevcdwwcmuh`: `ACTIVE_HEALTHY`;
+- all six promotion tables: RLS enabled + FORCE RLS;
+- no direct `anon` or `authenticated` CRUD grants on promotion tables;
+- Admin promotion, quote and placement RPCs/functions present with intended execute grants;
+- retired Phase 6 pending-voucher trigger absent;
+- no production promotions or promotion applications were inserted during deployment verification;
+- fresh security advisor: Phase 7 tables appear only as expected INFO `rls_enabled_no_policy`; sole WARN remains the pre-existing leaked-password-protection Auth setting;
+- fresh performance advisor: INFO unused-index findings only; no blocking performance lint.
 
-Customer final Codex validation commit:
+The database connector itself runs as `supabase_read_only_user` and cannot impersonate the app `anon` role, so a direct end-user RPC call was not made through that connector. Repository SQL/E2E gates validate the runtime RPC behavior; live verification validated deployment history, schema, grants and advisors without creating production order/test data.
 
-`404662aec382364c8e70fcee8d66b38d4b303f0a`
+## PR boundaries
 
-- Flutter 3.44.7 / Dart 3.12.2 / JDK 21.0.12;
-- analyze PASS;
-- 55/55 tests PASS;
-- format and `git diff --check` PASS;
-- exact-size UI/golden QA PASS at 390x844 and 430x932;
-- secret scan PASS;
-- no physical Android device was connected for this final validation pass.
+```text
+Aida_System             draft PR #27
+Aida_System-Dashboard   draft PR #24
+```
 
-Dashboard final Codex validation commit:
+Both remain draft/unmerged. Phase completion does not authorize merge.
 
-`af0fcd2babfa02073f882ec63ddbec102e591672`
+## Next phase rule
 
-- `npm ci` PASS, 0 vulnerabilities;
-- lint PASS with two pre-existing Fast Refresh warnings;
-- typecheck PASS;
-- Vitest 129/129 PASS across 29 files;
-- production build PASS with existing chunk-size advisory;
-- Playwright 10/10 PASS;
-- desktop visual QA PASS at 1366x768 and 1440x900;
-- no task-related console errors/warnings.
-
-Both UI reviews PASS against the existing AIDA theme/design systems; no Luckin branding/palette or second design system was introduced.
-
-## Branch state / release boundary
-
-Matching task branches:
-
-`codex/task-menu-customization-001-modifier-groups`
-
-Before documentation closeout:
-
-- customer branch: 37 commits ahead of `master`, 0 behind;
-- Dashboard branch: 12 commits ahead of `main`, 0 behind.
-
-No PR or merge is part of this closeout. Merge, APK build/install and hosted release remain separate explicit actions.
-
-## Still deferred
-
-- branch-specific catalogue/scheduling/capacity and branch-scoped queues;
-- terminal/sales-point authority;
-- shifts/cash reconciliation;
-- payment/refunds;
-- loyalty;
-- inventory;
-- promotions/discounts;
-- tax/accounting/reporting;
-- delivery;
-- hosted production deployment.
+Phase 8–10 remain frozen. Do not begin Phase 8 or resume a later-phase scheduler unless the owner explicitly authorizes continuation.

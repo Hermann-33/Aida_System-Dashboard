@@ -1,63 +1,83 @@
 # Roadmap
 
-Updated: 2026-08-17
-
-## Current tranche
-
-Implemented and validated to the current closeout standard:
-
-- governance and shared-backend ownership;
-- trusted identity/member foundation;
-- customer Supabase Auth/member integration and physical signup;
-- same-origin employee/Admin session boundary;
-- protected Dashboard Members;
-- shared catalogue, protected Admin mutation, POS/customer reads and customer revision refresh;
-- TASK-AUTH-005 preview/live session separation;
-- Android release networking and reproducible committed build toolchain;
-- authoritative quote/order/schedule/status backend;
-- customer authoritative quote/place/history/detail/status frontend;
-- Dashboard authoritative POS quote/place and server-policy scheduling;
-- Dashboard live polled order queue and versioned fulfilment transitions;
-- customer and Dashboard full local toolchain/test/build gates;
-- credential-backed live cross-client order lifecycle.
+Updated: 2026-09-15
 
 ## Current status
 
-`TASK-CLOSEOUT-001`: **COMPLETE** for implementation and applicable ADR-0004 validation.
+Phases 1–7 are `COMPLETE` against their defined authority, regression, client, live-deployment and advisor boundaries. Phase 8–10 remain frozen pending explicit owner authorization.
 
-Live proof completed on 2026-08-17:
+```text
+Phase 1 — operational topology                         COMPLETE
+Phase 2 — shift and cash authority                    COMPLETE
+Phase 3 — customer privacy/account requirements       COMPLETE
+Phase 4 — branch scheduling and pickup authority      COMPLETE
+Phase 5 — inventory and recipes                       COMPLETE
+Phase 6 — loyalty, rewards and vouchers               COMPLETE
+Phase 7 — promotions and discounts                    COMPLETE
+Phase 8 — reporting/accounting/audit                  FROZEN
+Phase 9 — payments/refunds/external integrations      FROZEN
+Phase 10 — App Store final release gate               FROZEN
+```
 
-customer placement
-→ persisted order
-→ Dashboard observation
-→ preparing
-→ customer authorized refresh
-→ ready
-→ customer authorized refresh
-→ completed
-→ customer authorized refresh.
+## Trusted foundation through Phase 7
 
-The retained evidence is order `100006` (`7cf027dc-3ff0-4604-a3fd-c7a943aac603`), authoritative total 1,290 sen, completed at status version 4. Approved demo credentials were process-local, were not committed and were removed after the run.
+The product now has server-owned authority for identity/roles, membership/privacy deletion, catalogue/pricing, topology, terminals, shifts/cash, scheduling/capacity, inventory/recipes, loyalty/rewards/vouchers, generalized promotions and immutable accepted commercial snapshots.
 
-## Merge state
+Dashboard privileged operations remain behind the same-origin HttpOnly BFF with caller-JWT forwarding. Customer Flutter submits intent through caller-bound RPCs. Preview fixtures never become backend authority.
 
-Customer PR #13 and Dashboard PR #12 are independently verified mergeable and have completed the closeout gates. Final merge is repository housekeeping, not an implementation blocker.
+## Phase 7 — promotions and discounts
 
-Hosted/Vercel deployment is **DEFERRED** for the accepted local-PC + cloud-Supabase + installed-phone demo topology.
+Completed scope:
 
-## Security operations
+- fixed/percentage promotion definitions and activation windows;
+- optional maximum discount, minimum subtotal and priority;
+- branch/product/variant/add-on targeting;
+- optional member requirement and global/per-member usage limits;
+- exclusive/stackable policy and explicit voucher coexistence;
+- automatic server-side promotion selection during quote;
+- deterministic locked re-evaluation during placement;
+- immutable applied-promotion commercial snapshots;
+- final-use concurrency protection;
+- Admin management through trusted BFF paths;
+- strict Flutter and Dashboard voucher/promotion reconciliation;
+- POS promotion presentation and preview isolation;
+- live AIDA migration deployment plus fresh advisors.
 
-Current Supabase security-advisor evidence has one WARN: leaked-password protection is disabled. Enabling it is hosted Auth configuration work and does not justify weakening application Auth/RLS boundaries.
+Validated implementation:
 
-## Next bounded product work
+```text
+Aida_System             c6abf24b498edb401af878f86d26e1c63a633121
+Aida_System-Dashboard   7e14326253b263412da5fa38f47bb137c31d7379
+Backend database audit #231   COMPLETE
+Customer release audit #311   COMPLETE
+Dashboard CI #147             COMPLETE
+```
 
-Do not conflate these deferred domains with the completed closeout tranche. Future bounded tasks include:
+Live AIDA project `eswovqxqzfevcdwwcmuh` is `ACTIVE_HEALTHY`. Canonical migrations `20260915100000`, `20260915101000`, `20260915101100` were applied through the migration service as live history `20260915120917`, `20260915121057`, `20260915121119`. Fresh advisors have no new blocking Phase 7 finding.
 
-1. trusted payment capture/refunds;
-2. loyalty earning/redemption and voucher lifecycle;
-3. inventory/recipes/depletion;
-4. promotions/discount authority;
-5. tax/accounting and trusted reporting;
-6. branch-scoped staff/order visibility and branch hours/capacity;
-7. delivery;
-8. hosted production deployment, signing/distribution and operational release work.
+## Phase 8 — reporting, accounting and audit
+
+`FROZEN`. Do not begin until the owner explicitly authorizes continuation. Intended scope includes trusted sales/operations projections, branch/terminal/staff/shift breakdowns, tax-ready transaction records, export and privileged audit events.
+
+## Phase 9 — payments, refunds and external integrations
+
+`FROZEN`. External processor capture/settlement/refunds, processor idempotency/webhooks, accounting/device integrations and deployment-heavy work remain deferred.
+
+## Phase 10 — App Store release gate
+
+`FROZEN`. Final iOS compatibility/release build, privacy manifest/App Privacy answers, physical account-deletion verification, production support/privacy URLs, review credentials/notes and final device/accessibility validation remain later work.
+
+## Dependency rule
+
+```text
+branch/topology
+ -> shift/cash
+ -> privacy/account boundary
+ -> scheduling/capacity
+ -> inventory/recipes
+ -> loyalty/rewards/vouchers
+ -> promotions/discounts
+ -X-> reporting until owner authorization
+ -> payments/refunds
+ -> final release gate
+```
