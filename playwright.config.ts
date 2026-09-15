@@ -1,12 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const API = process.env.E2E_API_URL || 'http://localhost:3011';
 const WEB = process.env.E2E_WEB_URL || 'http://localhost:5173';
 const PREVIEW_SUITE = process.argv.some((argument) => argument.includes('preview-closure'));
 
 /**
- * Critical browser flows against temporary environment only.
- * Start API (temp Neon) + Vite before running, or rely on webServer below.
+ * Supported browser gates run against the current same-origin Dashboard/BFF
+ * architecture. Preview closure additionally enables fixture-only UI mode and
+ * asserts that privileged/live authority is never silently replaced by mocks.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -32,10 +32,6 @@ export default defineConfig({
         env: {
           ...process.env,
           ...(PREVIEW_SUITE ? { VITE_UI_PREVIEW_MODE: 'true' } : {}),
-          // Proxy API through Vite — set VITE proxy target via env if needed
         },
       },
 });
-
-// Re-export API base for tests
-export const E2E_API_URL = API;

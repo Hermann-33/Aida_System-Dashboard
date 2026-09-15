@@ -15,6 +15,7 @@ export type OrderStatus =
   | 'ready'
   | 'completed'
   | 'cancelled';
+export type VoucherRewardType = 'fixed_amount' | 'free_item';
 
 export type OrderSelectionLine = {
   itemId: string;
@@ -87,11 +88,33 @@ export type OrderLineSnapshot = {
   note: string | null;
 };
 
+export type OrderQuoteVoucher = {
+  id: string;
+  code: string;
+  rewardCode: string;
+  rewardName: string;
+  rewardType: VoucherRewardType;
+  discountSen: number;
+  freeItemLineNumber: number | null;
+  expiresAt: string;
+};
+
+export type OrderVoucherSnapshot = {
+  code: string;
+  rewardCode: string;
+  rewardName: string;
+  rewardType: VoucherRewardType;
+  discountSen: number;
+  appliedAt: string;
+};
+
 export type OrderQuote = {
   pricingVersion: number;
   currency: 'MYR';
   subtotalSen: number;
+  discountSen: number;
   totalSen: number;
+  voucher: OrderQuoteVoucher | null;
   fulfillmentType: FulfillmentType;
   requestedPickupAt: string | null;
   serverNow: string;
@@ -143,7 +166,9 @@ export type OrderSnapshot = {
   currency: 'MYR';
   pricingVersion: number;
   subtotalSen: number;
+  discountSen: number;
   totalSen: number;
+  voucher: OrderVoucherSnapshot | null;
   createdAt: string;
   updatedAt: string;
   statusUpdatedAt: string;
@@ -273,6 +298,58 @@ function validOrderLine(value: unknown): value is OrderLineSnapshot {
     && isNullableString(value.note);
 }
 
+function validRewardType(value: unknown): value is VoucherRewardType {
+  return value === 'fixed_amount' || value === 'free_item';
+}
+
+function parseQuoteVoucher(value: unknown): OrderQuoteVoucher | null {
+  if (value === null) return null;
+  if (!isRecord(value)
+    || typeof value.id !== 'string' || value.id.length === 0
+    || typeof value.code !== 'string' || value.code.length === 0
+    || typeof value.rewardCode !== 'string' || value.rewardCode.length === 0
+    || typeof value.rewardName !== 'string' || value.rewardName.length === 0
+    || !validRewardType(value.rewardType)
+    || !isPositiveInteger(value.discountSen)
+    || !(value.freeItemLineNumber === null || isPositiveInteger(value.freeItemLineNumber))
+    || !isIsoTimestamp(value.expiresAt)) {
+    return invalidResponse('Order quote voucher snapshot is invalid.');
+  }
+  return value as OrderQuoteVoucher;
+}
+
+function parseOrderVoucher(value: unknown): OrderVoucherSnapshot | null {
+  if (value === null) return null;
+  if (!isRecord(value)
+    || typeof value.code !== 'string' || value.code.length === 0
+    || typeof value.rewardCode !== 'string' || value.rewardCode.length === 0
+    || typeof value.rewardName !== 'string' || value.rewardName.length === 0
+    || !validRewardType(value.rewardType)
+    || !isPositiveInteger(value.discountSen)
+    || !isIsoTimestamp(value.appliedAt)) {
+    return invalidResponse('Order voucher commercial snapshot is invalid.');
+  }
+  return value as OrderVoucherSnapshot;
+}
+
+function validateCommercialSnapshot(
+  subtotalSen: number,
+  discountSen: number,
+  totalSen: number,
+  voucher: { discountSen: number } | null,
+  label: string,
+): void {
+  if (discountSen > subtotalSen || totalSen !== subtotalSen - discountSen) {
+    invalidResponse(`${label} commercial totals are inconsistent.`);
+  }
+  if (discountSen === 0 && voucher !== null) {
+    invalidResponse(`${label} contains a voucher without an accepted discount.`);
+  }
+  if (discountSen > 0 && (voucher === null || voucher.discountSen !== discountSen)) {
+    invalidResponse(`${label} discount is not backed by the accepted Phase 6 voucher snapshot.`);
+  }
+}
+
 export function parseOrderingPolicy(value: unknown): OrderingPolicy {
   if (!isRecord(value)
     || !isIsoTimestamp(value.serverNow)
@@ -286,6 +363,52 @@ export function parseOrderingPolicy(value: unknown): OrderingPolicy {
     return invalidResponse('Ordering policy response is invalid.');
   }
   return value as OrderingPolicy;
+}
+
+function validSchedulePolicy(value: unknown): value is Omit<OrderingPolicy, 'serverNow'> {
+  return isRecord(value)
+    && typeof value.timezone === 'string'
+    && typeof value.scheduleEnabled === 'boolean'
+    && isNonNegativeNumber(value.minimumLeadMinutes)
+    && isNonNegativeNumber(value.preparationLeadMinutes)
+    && isNonNegativeNumber(value.slotIntervalMinutes)
+    && value.slotIntervalMinutes > 0
+    && isNonNegativeNumber(value.maximumAdvanceDays);
+}
+
+export function parseOrderQuote(value: unknown): OrderQuote {
+  if (!isRecord(value)
+    || !isPositiveInteger(value.pricingVersion)
+    || value.currency !== 'MYR'
+    || !isNonNegativeInteger(value.subtotalSen)
+    || !isNonNegativeInteger(value.discountSen)
+    || !isNonNegativeInteger(value.totalSen)
+    || (value.fulfillmentType !== 'asap' && value.fulfillmentType !== 'scheduled')
+    || !isNullableTimestamp(value.requestedPickupAt)
+    || !isIsoTimestamp(value.serverNow)
+    || !validSchedulePolicy(value.schedulePolicy)
+    || !Array.isArray(value.lines)
+    || value.lines.length === 0
+    || !value.lines.every(validOrderLine)) {
+    return invalidResponse('Order quote response is invalid.');
+  }
+
+  const lineSubtotal = value.lines.reduce((sum, line) => sum + line.lineTotalSen, 0);
+  if (!Number.isSafeInteger(lineSubtotal) || lineSubtotal !== value.subtotalSen) {
+    return invalidResponse('Order quote line snapshot is inconsistent.');
+  }
+  const voucher = parseQuoteVoucher(value.voucher);
+  validateCommercialSnapshot(value.subtotalSen, value.discountSen, value.totalSen, voucher, 'Order quote');
+
+  if (value.fulfillmentType === 'scheduled') {
+    if (!isIsoTimestamp(value.requestedPickupAt)) {
+      return invalidResponse('Scheduled quote pickup authority is invalid.');
+    }
+  } else if (value.requestedPickupAt !== null) {
+    return invalidResponse('ASAP quote unexpectedly contains scheduled pickup authority.');
+  }
+
+  return { ...value, voucher } as OrderQuote;
 }
 
 export function parseOrderSnapshot(value: unknown): OrderSnapshot {
@@ -319,8 +442,8 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
     || value.currency !== 'MYR'
     || !isPositiveInteger(value.pricingVersion)
     || !isNonNegativeInteger(value.subtotalSen)
+    || !isNonNegativeInteger(value.discountSen)
     || !isNonNegativeInteger(value.totalSen)
-    || value.totalSen > value.subtotalSen
     || !isIsoTimestamp(value.createdAt)
     || !isIsoTimestamp(value.updatedAt)
     || !isIsoTimestamp(value.statusUpdatedAt)
@@ -336,8 +459,10 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
 
   const lineSubtotal = value.lines.reduce((sum, line) => sum + line.lineTotalSen, 0);
   if (!Number.isSafeInteger(lineSubtotal) || lineSubtotal !== value.subtotalSen) {
-    return invalidResponse('Order commercial snapshot is inconsistent.');
+    return invalidResponse('Order commercial line snapshot is inconsistent.');
   }
+  const voucher = parseOrderVoucher(value.voucher);
+  validateCommercialSnapshot(value.subtotalSen, value.discountSen, value.totalSen, voucher, 'Order');
 
   if (value.fulfillmentType === 'scheduled') {
     if (!isIsoTimestamp(value.requestedPickupAt)) {
@@ -367,8 +492,6 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
       || value.customerUserId !== null) {
       return invalidResponse('POS operational attribution is invalid.');
     }
-    // A POS memberId is legitimate Phase 6 loyalty context. The customer Auth
-    // identity remains forbidden on POS snapshots.
   } else if (
     value.salesPointId !== null
     || value.terminalId !== null
@@ -397,7 +520,7 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
     return invalidResponse('Customer order unexpectedly contains POS payment authority.');
   }
 
-  return value as OrderSnapshot;
+  return { ...value, voucher } as OrderSnapshot;
 }
 
 export function cartToOrderItems(lines: CartLine[]): OrderSelectionLine[] {
@@ -467,7 +590,7 @@ export async function quoteOrder(payload: OrderIntentPayload): Promise<OrderQuot
     method: 'POST',
     body: JSON.stringify(payload),
   });
-  return parseResponse<OrderQuote>(response, 'Unable to quote this order.');
+  return parseOrderQuote(await parseResponse<unknown>(response, 'Unable to quote this order.'));
 }
 
 export async function placeOrder(payload: OrderPlacementPayload): Promise<OrderSnapshot> {

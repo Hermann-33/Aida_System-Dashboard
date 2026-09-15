@@ -41,5 +41,8 @@ jobs:
       - name: Live POS browser regression
         run: npm run test:e2e
 
+      - name: Preview isolation browser regression
+        run: npm run test:e2e:preview
+
       - name: Production build
         run: npm run build

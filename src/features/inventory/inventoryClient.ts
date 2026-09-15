@@ -34,10 +34,25 @@ function integer(value: unknown, label: string): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value)) throw new Error(`Invalid ${label}`);
   return value;
 }
-function nullableString(value: unknown): string | null {
-  return typeof value === 'string' && value ? value : null;
+function nonNegativeInteger(value: unknown, label: string): number {
+  const parsed = integer(value, label);
+  if (parsed < 0) throw new Error(`Invalid ${label}`);
+  return parsed;
 }
-function parseState(value: unknown): InventoryState {
+function positiveInteger(value: unknown, label: string): number {
+  const parsed = integer(value, label);
+  if (parsed <= 0) throw new Error(`Invalid ${label}`);
+  return parsed;
+}
+function boolean(value: unknown, label: string): boolean {
+  if (typeof value !== 'boolean') throw new Error(`Invalid ${label}`);
+  return value;
+}
+function nullableString(value: unknown): string | null {
+  if (value === null) return null;
+  return string(value, 'nullable string');
+}
+export function parseInventoryState(value: unknown): InventoryState {
   const root = record(value, 'inventory state');
   if (!Array.isArray(root.items) || !Array.isArray(root.recipes)) throw new Error('Invalid inventory arrays');
   return {
@@ -46,14 +61,31 @@ function parseState(value: unknown): InventoryState {
       const row = record(value, 'inventory item');
       const unit = string(row.baseUnit, 'baseUnit');
       if (unit !== 'g' && unit !== 'ml' && unit !== 'unit') throw new Error('Invalid baseUnit');
-      return { id: string(row.id,'item.id'), sku: string(row.sku,'item.sku'), name: string(row.name,'item.name'), baseUnit: unit, isActive: Boolean(row.isActive), onHandMilli: integer(row.onHandMilli,'item.onHandMilli') };
+      return {
+        id: string(row.id, 'item.id'),
+        sku: string(row.sku, 'item.sku'),
+        name: string(row.name, 'item.name'),
+        baseUnit: unit,
+        isActive: boolean(row.isActive, 'item.isActive'),
+        onHandMilli: nonNegativeInteger(row.onHandMilli, 'item.onHandMilli'),
+      };
     }),
     recipes: root.recipes.map((value) => {
       const row = record(value, 'recipe');
       if (!Array.isArray(row.components)) throw new Error('Invalid recipe components');
       return {
-        id: string(row.id,'recipe.id'), itemId: string(row.itemId,'recipe.itemId'), variantId: nullableString(row.variantId), name: string(row.name,'recipe.name'), isActive: Boolean(row.isActive),
-        components: row.components.map((component) => { const c=record(component,'recipe component'); return { inventoryItemId:string(c.inventoryItemId,'component.inventoryItemId'), quantityMilli:integer(c.quantityMilli,'component.quantityMilli') }; }),
+        id: string(row.id, 'recipe.id'),
+        itemId: string(row.itemId, 'recipe.itemId'),
+        variantId: nullableString(row.variantId),
+        name: string(row.name, 'recipe.name'),
+        isActive: boolean(row.isActive, 'recipe.isActive'),
+        components: row.components.map((component) => {
+          const c = record(component, 'recipe component');
+          return {
+            inventoryItemId: string(c.inventoryItemId, 'component.inventoryItemId'),
+            quantityMilli: positiveInteger(c.quantityMilli, 'component.quantityMilli'),
+          };
+        }),
       };
     }),
   };
@@ -66,17 +98,17 @@ async function body(response: Response): Promise<JsonRecord> {
 }
 export async function fetchInventoryState(branchId: string): Promise<InventoryState> {
   const response = await employeeFetch(`/api/v1/admin/inventory?branchId=${encodeURIComponent(branchId)}`);
-  return parseState((await body(response)).data);
+  return parseInventoryState((await body(response)).data);
 }
 export async function saveInventoryItem(payload: { id?: string; sku: string; name: string; baseUnit: InventoryItem['baseUnit']; isActive: boolean }): Promise<void> {
-  const response = await employeeFetch('/api/v1/admin/inventory/item', { method:'POST', body:JSON.stringify(payload) });
+  const response = await employeeFetch('/api/v1/admin/inventory/item', { method: 'POST', body: JSON.stringify(payload) });
   await body(response);
 }
-export async function recordInventoryMovement(payload: { branchId:string; inventoryItemId:string; deltaMilli:number; movementKind:'receiving'|'waste'|'adjustment'; note?:string }): Promise<void> {
-  const response = await employeeFetch('/api/v1/admin/inventory/movement', { method:'POST', body:JSON.stringify(payload) });
+export async function recordInventoryMovement(payload: { branchId: string; inventoryItemId: string; deltaMilli: number; movementKind: 'receiving' | 'waste' | 'adjustment'; note?: string }): Promise<void> {
+  const response = await employeeFetch('/api/v1/admin/inventory/movement', { method: 'POST', body: JSON.stringify(payload) });
   await body(response);
 }
-export async function saveRecipe(payload: { id?:string; itemId:string; variantId:string|null; name:string; isActive:boolean; components:RecipeComponent[] }): Promise<void> {
-  const response = await employeeFetch('/api/v1/admin/inventory/recipe', { method:'POST', body:JSON.stringify(payload) });
+export async function saveRecipe(payload: { id?: string; itemId: string; variantId: string | null; name: string; isActive: boolean; components: RecipeComponent[] }): Promise<void> {
+  const response = await employeeFetch('/api/v1/admin/inventory/recipe', { method: 'POST', body: JSON.stringify(payload) });
   await body(response);
 }

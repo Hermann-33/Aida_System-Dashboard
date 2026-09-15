@@ -169,7 +169,16 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
             <Input
               id="pos-member-code"
               value={memberCode}
-              onChange={(event) => setMemberCode(event.target.value.toUpperCase())}
+              onChange={(event) => {
+                const nextCode = event.target.value.toUpperCase();
+                setMemberCode(nextCode);
+                if (member && nextCode.trim() !== member.memberCode) {
+                  setMember(null);
+                  setVoucherId('');
+                  setTrustedQuote(null);
+                  placementAttempt.current = null;
+                }
+              }}
               placeholder="Member code"
               autoComplete="off"
             />
@@ -192,6 +201,7 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
                 setMemberCode('');
                 setVoucherId('');
                 setTrustedQuote(null);
+                placementAttempt.current = null;
               }}
             >
               Remove
@@ -213,6 +223,7 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
                 onChange={(event) => {
                   setVoucherId(event.target.value);
                   setTrustedQuote(null);
+                  placementAttempt.current = null;
                 }}
                 className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
                 disabled={quote.isPending || place.isPending}
@@ -259,9 +270,9 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
         <div aria-live="polite" className="mt-5 rounded-xl border border-primary/30 bg-accent p-4">
           <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Authoritative server total</p>
           <p className="mt-1 text-2xl font-bold text-primary">{formatRmFromSen(currentQuote.totalSen)}</p>
-          {currentQuote.subtotalSen > currentQuote.totalSen && (
+          {currentQuote.discountSen > 0 && (
             <p className="mt-1 text-sm font-semibold text-[var(--aida-success)]">
-              Server discount {formatRmFromSen(currentQuote.subtotalSen - currentQuote.totalSen)}
+              Server discount {formatRmFromSen(currentQuote.discountSen)}
             </p>
           )}
           <p className="mt-1 text-sm text-muted-foreground">
@@ -306,6 +317,11 @@ export function AuthoritativeOrderReceipt({ order, onNewSale }: { order: OrderSn
           : 'Now pickup'} · status {order.status}
       </p>
       <p className="mt-4 text-2xl font-bold text-foreground">{formatRmFromSen(order.totalSen)}</p>
+      {order.discountSen > 0 && (
+        <p className="mt-1 text-sm font-semibold text-[var(--aida-success)]">
+          Discount {formatRmFromSen(order.discountSen)}{order.voucher ? ` · ${order.voucher.rewardName}` : ''}
+        </p>
+      )}
       <p className="mt-1 text-sm font-semibold text-muted-foreground">Tender and payment state persisted by the server.</p>
       <Button type="button" className="mt-5" onClick={onNewSale}>New sale</Button>
     </section>
