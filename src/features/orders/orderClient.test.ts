@@ -46,7 +46,8 @@ const baseOrderSnapshot = {
   fulfillmentType: 'asap' as const, requestedPickupAt: null, prepareAt: null,
   serverNow: '2026-08-20T12:00:00Z', scheduleState: null, status: 'confirmed' as const,
   statusVersion: 1, currency: 'MYR' as const, pricingVersion: 2,
-  subtotalSen: 1450, discountSen: 0, totalSen: 1450, voucher: null,
+  subtotalSen: 1450, voucherDiscountSen: 0, promotionDiscountSen: 0,
+  discountSen: 0, totalSen: 1450, voucher: null, promotions: [],
   createdAt: '2026-08-20T12:00:00Z', updatedAt: '2026-08-20T12:00:00Z',
   statusUpdatedAt: '2026-08-20T12:00:00Z', preparingAt: null, readyAt: null,
   completedAt: null, cancelledAt: null, lines: [validSnapshotLine],
@@ -56,9 +57,12 @@ const validQuote = {
   pricingVersion: 2,
   currency: 'MYR' as const,
   subtotalSen: 1450,
+  voucherDiscountSen: 0,
+  promotionDiscountSen: 0,
   discountSen: 0,
   totalSen: 1450,
   voucher: null,
+  promotions: [],
   fulfillmentType: 'asap' as const,
   requestedPickupAt: null,
   serverNow: '2026-08-20T12:00:00Z',
@@ -67,6 +71,18 @@ const validQuote = {
     preparationLeadMinutes: 15, slotIntervalMinutes: 15, maximumAdvanceDays: 7,
   },
   lines: [validSnapshotLine],
+};
+
+const quotePromotion = {
+  id: 'promotion-1', code: 'P7_RM1', name: 'RM1 off', discountType: 'fixed' as const,
+  discountValue: 100, discountSen: 100, priority: 10, stackingMode: 'stackable' as const,
+  allowWithVoucher: true,
+};
+
+const appliedPromotion = {
+  code: 'P7_RM1', name: 'RM1 off', discountType: 'fixed' as const,
+  discountValue: 100, discountSen: 100, priority: 10, stackingMode: 'stackable' as const,
+  allowWithVoucher: true, appliedAt: '2026-08-20T12:00:00Z',
 };
 
 describe('order client trust boundary', () => {
@@ -109,36 +125,37 @@ describe('order client trust boundary', () => {
     expect(employeeFetch).toHaveBeenNthCalledWith(3, '/api/v1/orders?status=confirmed&status=scheduled&limit=100', { method: 'GET' });
   });
 
-  it('strictly validates Phase 6 quote discount and voucher authority', () => {
-    expect(parseOrderQuote(validQuote)).toMatchObject({ discountSen: 0, voucher: null });
-    expect(() => parseOrderQuote({ ...validQuote, discountSen: 100, totalSen: 1350, voucher: null }))
-      .toThrow(/not backed/i);
-    expect(() => parseOrderQuote({ ...validQuote, discountSen: 100, totalSen: 1450 }))
-      .toThrow(/inconsistent/i);
+  it('strictly validates Phase 7 quote voucher and promotion authority', () => {
+    expect(parseOrderQuote(validQuote)).toMatchObject({ discountSen: 0, voucher: null, promotions: [] });
+    expect(parseOrderQuote({ ...validQuote, promotionDiscountSen: 100, discountSen: 100, totalSen: 1350, promotions: [quotePromotion] }))
+      .toMatchObject({ promotionDiscountSen: 100, promotions: [{ code: 'P7_RM1' }] });
 
     const voucher = {
       id: 'voucher-1', code: 'AIDA-V-TEST', rewardCode: 'POINTS_RM5', rewardName: 'RM5 Voucher',
       rewardType: 'fixed_amount' as const, discountSen: 500, freeItemLineNumber: null,
       expiresAt: '2026-09-20T00:00:00Z',
     };
-    expect(parseOrderQuote({ ...validQuote, discountSen: 500, totalSen: 950, voucher })).toMatchObject({
-      discountSen: 500, voucher: { code: 'AIDA-V-TEST' },
-    });
-    expect(() => parseOrderQuote({ ...validQuote, discountSen: 500, totalSen: 950, voucher: { ...voucher, discountSen: 400 } }))
-      .toThrow(/not backed/i);
+    expect(parseOrderQuote({ ...validQuote, voucherDiscountSen: 500, promotionDiscountSen: 100, discountSen: 600, totalSen: 850, voucher, promotions: [quotePromotion] }))
+      .toMatchObject({ voucherDiscountSen: 500, promotionDiscountSen: 100, discountSen: 600 });
+    expect(() => parseOrderQuote({ ...validQuote, promotionDiscountSen: 100, discountSen: 100, totalSen: 1350, promotions: [] }))
+      .toThrow(/promotion snapshots/i);
+    expect(() => parseOrderQuote({ ...validQuote, voucherDiscountSen: 500, discountSen: 500, totalSen: 950, voucher: { ...voucher, discountSen: 400 } }))
+      .toThrow(/voucher discount/i);
+    expect(() => parseOrderQuote({ ...validQuote, voucherDiscountSen: 500, promotionDiscountSen: 100, discountSen: 600, totalSen: 850, voucher, promotions: [{ ...quotePromotion, allowWithVoucher: false }] }))
+      .toThrow(/voucher-incompatible/i);
   });
 
-  it('strictly validates immutable order voucher snapshots', () => {
+  it('strictly validates immutable Phase 7 order discount snapshots', () => {
     const voucher = {
       code: 'AIDA-V-TEST', rewardCode: 'POINTS_RM5', rewardName: 'RM5 Voucher',
       rewardType: 'fixed_amount' as const, discountSen: 500, appliedAt: '2026-08-20T12:00:00Z',
     };
-    expect(parseOrderSnapshot({ ...baseOrderSnapshot, discountSen: 500, totalSen: 950, voucher }))
-      .toMatchObject({ discountSen: 500, voucher: { rewardCode: 'POINTS_RM5' } });
-    expect(() => parseOrderSnapshot({ ...baseOrderSnapshot, discountSen: 500, totalSen: 950, voucher: null }))
-      .toThrow(/not backed/i);
-    expect(() => parseOrderSnapshot({ ...baseOrderSnapshot, discountSen: 500, totalSen: 950, voucher: { ...voucher, appliedAt: 'bad' } }))
-      .toThrow(/voucher commercial snapshot/i);
+    expect(parseOrderSnapshot({ ...baseOrderSnapshot, voucherDiscountSen: 500, promotionDiscountSen: 100, discountSen: 600, totalSen: 850, voucher, promotions: [appliedPromotion] }))
+      .toMatchObject({ discountSen: 600, voucher: { rewardCode: 'POINTS_RM5' }, promotions: [{ code: 'P7_RM1' }] });
+    expect(() => parseOrderSnapshot({ ...baseOrderSnapshot, promotionDiscountSen: 100, discountSen: 100, totalSen: 1350, promotions: [{ ...appliedPromotion, appliedAt: 'bad' }] }))
+      .toThrow(/promotion commercial snapshot/i);
+    expect(() => parseOrderSnapshot({ ...baseOrderSnapshot, promotionDiscountSen: 200, discountSen: 200, totalSen: 1250, promotions: [{ ...appliedPromotion, stackingMode: 'exclusive' as const }, { ...appliedPromotion, code: 'P7_SECOND', priority: 20 }] }))
+      .toThrow(/exclusive promotion/i);
   });
 
   it('derives aligned scheduled slots from server time and policy', () => {
@@ -169,52 +186,28 @@ describe('order client trust boundary', () => {
 
   it('accepts trusted POS terminal/shift attribution and rejects partial or customer terminal context', async () => {
     vi.mocked(employeeFetch)
-      .mockResolvedValueOnce(new Response(JSON.stringify([{
-        ...baseOrderSnapshot, source: 'pos', customerUserId: null, memberId: null,
-        salesPointId: 'sales-main', salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' },
-        terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' }, shiftId: 'shift-main',
-      }])))
-      .mockResolvedValueOnce(new Response(JSON.stringify([{
-        ...baseOrderSnapshot, source: 'pos', customerUserId: null, memberId: null,
-        salesPointId: 'sales-main', salesPoint: null,
-        terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' }, shiftId: 'shift-main',
-      }])))
-      .mockResolvedValueOnce(new Response(JSON.stringify([{
-        ...baseOrderSnapshot, source: 'customer', salesPointId: 'sales-main',
-        salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' },
-        terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' },
-      }])));
-
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ ...baseOrderSnapshot, source: 'pos', customerUserId: null, memberId: null, salesPointId: 'sales-main', salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' }, terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' }, shiftId: 'shift-main' }])))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ ...baseOrderSnapshot, source: 'pos', customerUserId: null, memberId: null, salesPointId: 'sales-main', salesPoint: null, terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' }, shiftId: 'shift-main' }])))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ ...baseOrderSnapshot, source: 'customer', salesPointId: 'sales-main', salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' }, terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' } }])));
     await expect(fetchOrders()).resolves.toMatchObject([{ shiftId: 'shift-main', salesPoint: { code: 'SP-MAIN' }, terminal: { code: 'POS-MAIN-01' } }]);
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
   });
 
   it('accepts server-owned cash payment authority and rejects cash claims without a shift', async () => {
-    const cashOrder = {
-      ...baseOrderSnapshot, source: 'pos' as const, customerUserId: null, memberId: null,
-      salesPointId: 'sales-main', salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' },
-      terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' }, shiftId: 'shift-main',
-      tenderType: 'cash' as const, paymentState: 'paid' as const, paidAt: '2026-08-20T12:00:00Z',
-    };
+    const cashOrder = { ...baseOrderSnapshot, source: 'pos' as const, customerUserId: null, memberId: null, salesPointId: 'sales-main', salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' }, terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' }, shiftId: 'shift-main', tenderType: 'cash' as const, paymentState: 'paid' as const, paidAt: '2026-08-20T12:00:00Z' };
     vi.mocked(employeeFetch)
       .mockResolvedValueOnce(new Response(JSON.stringify([cashOrder])))
       .mockResolvedValueOnce(new Response(JSON.stringify([{ ...cashOrder, shiftId: null }])));
-
     await expect(fetchOrders()).resolves.toMatchObject([{ shiftId: 'shift-main', tenderType: 'cash', paymentState: 'paid' }]);
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
   });
 
   it('accepts POS member identity for loyalty but rejects POS customer identity', async () => {
-    const posOrder = {
-      ...baseOrderSnapshot, source: 'pos' as const, customerUserId: null, memberId: 'member-loyalty',
-      salesPointId: 'sales-main', salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' },
-      terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' }, shiftId: 'shift-main',
-    };
+    const posOrder = { ...baseOrderSnapshot, source: 'pos' as const, customerUserId: null, memberId: 'member-loyalty', salesPointId: 'sales-main', salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' }, terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' }, shiftId: 'shift-main' };
     vi.mocked(employeeFetch)
       .mockResolvedValueOnce(new Response(JSON.stringify([posOrder])))
       .mockResolvedValueOnce(new Response(JSON.stringify([{ ...posOrder, customerUserId: 'customer-forbidden' }])));
-
     await expect(fetchOrders()).resolves.toMatchObject([{ memberId: 'member-loyalty' }]);
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
   });
@@ -222,9 +215,7 @@ describe('order client trust boundary', () => {
   it('rejects customer attempts to carry shift or payment authority', async () => {
     vi.mocked(employeeFetch)
       .mockResolvedValueOnce(new Response(JSON.stringify([{ ...baseOrderSnapshot, shiftId: 'shift-main' }])))
-      .mockResolvedValueOnce(new Response(JSON.stringify([{
-        ...baseOrderSnapshot, tenderType: 'cash', paymentState: 'paid', paidAt: '2026-08-20T12:00:00Z',
-      }])));
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ ...baseOrderSnapshot, tenderType: 'cash', paymentState: 'paid', paidAt: '2026-08-20T12:00:00Z' }])));
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
   });
@@ -232,17 +223,13 @@ describe('order client trust boundary', () => {
   it('rejects malformed monetary or line snapshots', async () => {
     vi.mocked(employeeFetch)
       .mockResolvedValueOnce(new Response(JSON.stringify([{ ...baseOrderSnapshot, totalSen: 1450.5 }])))
-      .mockResolvedValueOnce(new Response(JSON.stringify([{
-        ...baseOrderSnapshot, lines: [{ ...validSnapshotLine, lineTotalSen: 1400 }],
-      }])));
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ ...baseOrderSnapshot, lines: [{ ...validSnapshotLine, lineTotalSen: 1400 }] }])));
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
   });
 
   it('rejects a branch snapshot that disagrees with branchId', async () => {
-    vi.mocked(employeeFetch).mockResolvedValueOnce(new Response(JSON.stringify([{
-      ...baseOrderSnapshot, branch: { ...baseOrderSnapshot.branch, id: 'branch-other' },
-    }])));
+    vi.mocked(employeeFetch).mockResolvedValueOnce(new Response(JSON.stringify([{ ...baseOrderSnapshot, branch: { ...baseOrderSnapshot.branch, id: 'branch-other' } }])));
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
   });
 
