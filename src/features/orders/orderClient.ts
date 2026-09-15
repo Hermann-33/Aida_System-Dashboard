@@ -16,6 +16,8 @@ export type OrderStatus =
   | 'completed'
   | 'cancelled';
 export type VoucherRewardType = 'fixed_amount' | 'free_item';
+export type PromotionDiscountType = 'fixed' | 'percent';
+export type PromotionStackingMode = 'exclusive' | 'stackable';
 
 export type OrderSelectionLine = {
   itemId: string;
@@ -108,13 +110,32 @@ export type OrderVoucherSnapshot = {
   appliedAt: string;
 };
 
+export type OrderQuotePromotion = {
+  id: string;
+  code: string;
+  name: string;
+  discountType: PromotionDiscountType;
+  discountValue: number;
+  discountSen: number;
+  priority: number;
+  stackingMode: PromotionStackingMode;
+  allowWithVoucher: boolean;
+};
+
+export type OrderPromotionSnapshot = Omit<OrderQuotePromotion, 'id'> & {
+  appliedAt: string;
+};
+
 export type OrderQuote = {
   pricingVersion: number;
   currency: 'MYR';
   subtotalSen: number;
+  voucherDiscountSen: number;
+  promotionDiscountSen: number;
   discountSen: number;
   totalSen: number;
   voucher: OrderQuoteVoucher | null;
+  promotions: OrderQuotePromotion[];
   fulfillmentType: FulfillmentType;
   requestedPickupAt: string | null;
   serverNow: string;
@@ -166,9 +187,12 @@ export type OrderSnapshot = {
   currency: 'MYR';
   pricingVersion: number;
   subtotalSen: number;
+  voucherDiscountSen: number;
+  promotionDiscountSen: number;
   discountSen: number;
   totalSen: number;
   voucher: OrderVoucherSnapshot | null;
+  promotions: OrderPromotionSnapshot[];
   createdAt: string;
   updatedAt: string;
   statusUpdatedAt: string;
@@ -332,21 +356,86 @@ function parseOrderVoucher(value: unknown): OrderVoucherSnapshot | null {
   return value as OrderVoucherSnapshot;
 }
 
+function validPromotionDiscountType(value: unknown): value is PromotionDiscountType {
+  return value === 'fixed' || value === 'percent';
+}
+
+function validPromotionStackingMode(value: unknown): value is PromotionStackingMode {
+  return value === 'exclusive' || value === 'stackable';
+}
+
+function parseQuotePromotion(value: unknown): OrderQuotePromotion {
+  if (!isRecord(value)
+    || typeof value.id !== 'string' || value.id.length === 0
+    || typeof value.code !== 'string' || value.code.length === 0
+    || typeof value.name !== 'string' || value.name.length === 0
+    || !validPromotionDiscountType(value.discountType)
+    || !isPositiveInteger(value.discountValue)
+    || (value.discountType === 'percent' && value.discountValue > 10_000)
+    || !isPositiveInteger(value.discountSen)
+    || !isNonNegativeInteger(value.priority)
+    || !validPromotionStackingMode(value.stackingMode)
+    || typeof value.allowWithVoucher !== 'boolean') {
+    return invalidResponse('Order quote promotion snapshot is invalid.');
+  }
+  return value as OrderQuotePromotion;
+}
+
+function parseOrderPromotion(value: unknown): OrderPromotionSnapshot {
+  if (!isRecord(value)
+    || typeof value.code !== 'string' || value.code.length === 0
+    || typeof value.name !== 'string' || value.name.length === 0
+    || !validPromotionDiscountType(value.discountType)
+    || !isPositiveInteger(value.discountValue)
+    || (value.discountType === 'percent' && value.discountValue > 10_000)
+    || !isPositiveInteger(value.discountSen)
+    || !isNonNegativeInteger(value.priority)
+    || !validPromotionStackingMode(value.stackingMode)
+    || typeof value.allowWithVoucher !== 'boolean'
+    || !isIsoTimestamp(value.appliedAt)) {
+    return invalidResponse('Order promotion commercial snapshot is invalid.');
+  }
+  return value as OrderPromotionSnapshot;
+}
+
 function validateCommercialSnapshot(
   subtotalSen: number,
+  voucherDiscountSen: number,
+  promotionDiscountSen: number,
   discountSen: number,
   totalSen: number,
   voucher: { discountSen: number } | null,
+  promotions: Array<{ code: string; discountSen: number; stackingMode: PromotionStackingMode; allowWithVoucher: boolean }>,
   label: string,
 ): void {
   if (discountSen > subtotalSen || totalSen !== subtotalSen - discountSen) {
     invalidResponse(`${label} commercial totals are inconsistent.`);
   }
-  if (discountSen === 0 && voucher !== null) {
-    invalidResponse(`${label} contains a voucher without an accepted discount.`);
+  if (discountSen !== voucherDiscountSen + promotionDiscountSen) {
+    invalidResponse(`${label} discount components do not reconcile.`);
   }
-  if (discountSen > 0 && (voucher === null || voucher.discountSen !== discountSen)) {
-    invalidResponse(`${label} discount is not backed by the accepted Phase 6 voucher snapshot.`);
+  if (voucherDiscountSen === 0 && voucher !== null) {
+    invalidResponse(`${label} contains a voucher without a voucher discount.`);
+  }
+  if (voucherDiscountSen > 0 && (voucher === null || voucher.discountSen !== voucherDiscountSen)) {
+    invalidResponse(`${label} voucher discount is not backed by the accepted voucher snapshot.`);
+  }
+  if (promotionDiscountSen === 0 && promotions.length !== 0) {
+    invalidResponse(`${label} contains promotions without a promotion discount.`);
+  }
+  const promotionTotal = promotions.reduce((sum, promotion) => sum + promotion.discountSen, 0);
+  if (!Number.isSafeInteger(promotionTotal) || promotionTotal !== promotionDiscountSen) {
+    invalidResponse(`${label} promotion snapshots do not reconcile to the promotion discount.`);
+  }
+  const codes = new Set(promotions.map((promotion) => promotion.code));
+  if (codes.size !== promotions.length) {
+    invalidResponse(`${label} contains duplicate promotion snapshots.`);
+  }
+  if (promotions.length > 1 && promotions.some((promotion) => promotion.stackingMode === 'exclusive')) {
+    invalidResponse(`${label} contains an exclusive promotion alongside another promotion.`);
+  }
+  if (voucherDiscountSen > 0 && promotions.some((promotion) => !promotion.allowWithVoucher)) {
+    invalidResponse(`${label} contains a voucher-incompatible promotion.`);
   }
 }
 
@@ -381,8 +470,11 @@ export function parseOrderQuote(value: unknown): OrderQuote {
     || !isPositiveInteger(value.pricingVersion)
     || value.currency !== 'MYR'
     || !isNonNegativeInteger(value.subtotalSen)
+    || !isNonNegativeInteger(value.voucherDiscountSen)
+    || !isNonNegativeInteger(value.promotionDiscountSen)
     || !isNonNegativeInteger(value.discountSen)
     || !isNonNegativeInteger(value.totalSen)
+    || !Array.isArray(value.promotions)
     || (value.fulfillmentType !== 'asap' && value.fulfillmentType !== 'scheduled')
     || !isNullableTimestamp(value.requestedPickupAt)
     || !isIsoTimestamp(value.serverNow)
@@ -398,7 +490,17 @@ export function parseOrderQuote(value: unknown): OrderQuote {
     return invalidResponse('Order quote line snapshot is inconsistent.');
   }
   const voucher = parseQuoteVoucher(value.voucher);
-  validateCommercialSnapshot(value.subtotalSen, value.discountSen, value.totalSen, voucher, 'Order quote');
+  const promotions = value.promotions.map(parseQuotePromotion);
+  validateCommercialSnapshot(
+    value.subtotalSen,
+    value.voucherDiscountSen,
+    value.promotionDiscountSen,
+    value.discountSen,
+    value.totalSen,
+    voucher,
+    promotions,
+    'Order quote',
+  );
 
   if (value.fulfillmentType === 'scheduled') {
     if (!isIsoTimestamp(value.requestedPickupAt)) {
@@ -408,7 +510,7 @@ export function parseOrderQuote(value: unknown): OrderQuote {
     return invalidResponse('ASAP quote unexpectedly contains scheduled pickup authority.');
   }
 
-  return { ...value, voucher } as OrderQuote;
+  return { ...value, voucher, promotions } as OrderQuote;
 }
 
 export function parseOrderSnapshot(value: unknown): OrderSnapshot {
@@ -442,8 +544,11 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
     || value.currency !== 'MYR'
     || !isPositiveInteger(value.pricingVersion)
     || !isNonNegativeInteger(value.subtotalSen)
+    || !isNonNegativeInteger(value.voucherDiscountSen)
+    || !isNonNegativeInteger(value.promotionDiscountSen)
     || !isNonNegativeInteger(value.discountSen)
     || !isNonNegativeInteger(value.totalSen)
+    || !Array.isArray(value.promotions)
     || !isIsoTimestamp(value.createdAt)
     || !isIsoTimestamp(value.updatedAt)
     || !isIsoTimestamp(value.statusUpdatedAt)
@@ -462,7 +567,17 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
     return invalidResponse('Order commercial line snapshot is inconsistent.');
   }
   const voucher = parseOrderVoucher(value.voucher);
-  validateCommercialSnapshot(value.subtotalSen, value.discountSen, value.totalSen, voucher, 'Order');
+  const promotions = value.promotions.map(parseOrderPromotion);
+  validateCommercialSnapshot(
+    value.subtotalSen,
+    value.voucherDiscountSen,
+    value.promotionDiscountSen,
+    value.discountSen,
+    value.totalSen,
+    voucher,
+    promotions,
+    'Order',
+  );
 
   if (value.fulfillmentType === 'scheduled') {
     if (!isIsoTimestamp(value.requestedPickupAt)) {
@@ -520,7 +635,7 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
     return invalidResponse('Customer order unexpectedly contains POS payment authority.');
   }
 
-  return { ...value, voucher } as OrderSnapshot;
+  return { ...value, voucher, promotions } as OrderSnapshot;
 }
 
 export function cartToOrderItems(lines: CartLine[]): OrderSelectionLine[] {
