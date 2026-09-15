@@ -108,7 +108,7 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
     <section aria-labelledby="order-checkout-title" className="mx-auto max-w-2xl rounded-2xl border border-border bg-card p-5 shadow-sm">
       <h2 id="order-checkout-title" className="font-display text-xl text-primary">Review order</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        The server revalidates catalogue availability, options, scheduling, price, member, voucher, shift and tender before placement.
+        The server revalidates catalogue availability, options, scheduling, price, promotions, member, voucher, shift and tender before placement.
       </p>
 
       <fieldset className="mt-5">
@@ -262,7 +262,7 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
           </Button>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
-          Cash is recorded by the server against the active shift. Card and e-wallet processor settlement remain outside Phase 2.
+          Cash is recorded by the server against the active shift. Card and e-wallet processor settlement remain outside the current payment authority.
         </p>
       </fieldset>
 
@@ -272,9 +272,19 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
           <p className="mt-1 text-2xl font-bold text-primary">{formatRmFromSen(currentQuote.totalSen)}</p>
           {currentQuote.discountSen > 0 && (
             <p className="mt-1 text-sm font-semibold text-[var(--aida-success)]">
-              Server discount {formatRmFromSen(currentQuote.discountSen)}
+              Total discount {formatRmFromSen(currentQuote.discountSen)}
             </p>
           )}
+          {currentQuote.voucherDiscountSen > 0 && currentQuote.voucher && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Voucher · {currentQuote.voucher.rewardName} · −{formatRmFromSen(currentQuote.voucherDiscountSen)}
+            </p>
+          )}
+          {currentQuote.promotions.map((promotion) => (
+            <p key={promotion.id} className="mt-1 text-xs text-muted-foreground">
+              Promotion · {promotion.name} · −{formatRmFromSen(promotion.discountSen)}
+            </p>
+          ))}
           <p className="mt-1 text-sm text-muted-foreground">
             {currentQuote.lines.length} line{currentQuote.lines.length === 1 ? '' : 's'} · pricing version {currentQuote.pricingVersion}
           </p>
@@ -319,9 +329,17 @@ export function AuthoritativeOrderReceipt({ order, onNewSale }: { order: OrderSn
       <p className="mt-4 text-2xl font-bold text-foreground">{formatRmFromSen(order.totalSen)}</p>
       {order.discountSen > 0 && (
         <p className="mt-1 text-sm font-semibold text-[var(--aida-success)]">
-          Discount {formatRmFromSen(order.discountSen)}{order.voucher ? ` · ${order.voucher.rewardName}` : ''}
+          Discount {formatRmFromSen(order.discountSen)}
         </p>
       )}
+      {order.voucherDiscountSen > 0 && order.voucher && (
+        <p className="mt-1 text-xs text-muted-foreground">Voucher · {order.voucher.rewardName} · −{formatRmFromSen(order.voucherDiscountSen)}</p>
+      )}
+      {order.promotions.map((promotion) => (
+        <p key={`${promotion.code}-${promotion.priority}`} className="mt-1 text-xs text-muted-foreground">
+          Promotion · {promotion.name} · −{formatRmFromSen(promotion.discountSen)}
+        </p>
+      ))}
       <p className="mt-1 text-sm font-semibold text-muted-foreground">Tender and payment state persisted by the server.</p>
       <Button type="button" className="mt-5" onClick={onNewSale}>New sale</Button>
     </section>
