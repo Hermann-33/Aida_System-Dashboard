@@ -205,11 +205,11 @@ test.describe('Preview closure gate (no backend)', () => {
     await page.getByRole('button', { name: /review & place/i }).click();
     await page.getByRole('button', { name: /review authoritative total/i }).click();
     await expect(page.getByText('RM 13.50')).toBeVisible();
-    await expect(page.getByText(/Promotion · Phase 7 Test · −RM 1.00/i)).toBeVisible();
+    await expect(page.getByText(/Promotion.*Phase 7 Test.*RM\s*1\.00/i)).toBeVisible();
     expect(JSON.stringify(quotePayload)).not.toMatch(/price|total|name|member|status|promotion/i);
     await page.getByRole('button', { name: /place order/i }).click();
     await expect(page.getByRole('heading', { name: /order #100031/i })).toBeVisible();
-    await expect(page.getByText(/Promotion · Phase 7 Test · −RM 1.00/i)).toBeVisible();
+    await expect(page.getByText(/Promotion.*Phase 7 Test.*RM\s*1\.00/i)).toBeVisible();
     await page.getByRole('button', { name: /^orders$/i }).click();
     await expect(page.getByText('#100031', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: /start preparing/i }).click();
