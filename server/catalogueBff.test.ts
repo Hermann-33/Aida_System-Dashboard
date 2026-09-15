@@ -79,6 +79,7 @@ describe('catalogue BFF', () => {
     const { deps, calls } = depsWith([
       jsonResponse({ id: 'employee-user', email: 'admin@example.test' }),
       jsonResponse([adminProfile('admin')]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
       jsonResponse(snapshot),
     ]);
 
@@ -89,7 +90,7 @@ describe('catalogue BFF', () => {
 
     expect(response.status).toBe(200);
     expect((await response.json()).items).toHaveLength(1);
-    const rpc = calls[2];
+    const rpc = calls[3];
     expect(rpc?.url).toContain('/rest/v1/rpc/get_catalogue');
     expect(new Headers(rpc?.init?.headers).get('Authorization')).toBe('Bearer admin-access');
   });
@@ -98,6 +99,7 @@ describe('catalogue BFF', () => {
     const { deps, calls } = depsWith([
       jsonResponse({ id: 'employee-user', email: 'admin@example.test' }),
       jsonResponse([adminProfile('staff')]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
     ]);
 
     const response = await handleAdminCatalogue(
@@ -107,13 +109,14 @@ describe('catalogue BFF', () => {
 
     expect(response.status).toBe(403);
     expect((await response.json()).code).toBe('ADMIN_REQUIRED');
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
   });
 
   it('saves an item through the invoker RPC with the admin caller token', async () => {
     const { deps, calls } = depsWith([
       jsonResponse({ id: 'employee-user', email: 'admin@example.test' }),
       jsonResponse([adminProfile('admin')]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
       jsonResponse('item-server-id'),
     ]);
 
@@ -131,7 +134,7 @@ describe('catalogue BFF', () => {
 
     expect(response.status).toBe(200);
     expect((await response.json()).id).toBe('item-server-id');
-    const rpc = calls[2];
+    const rpc = calls[3];
     expect(rpc?.url).toContain('/rest/v1/rpc/save_catalogue_item');
     expect(new Headers(rpc?.init?.headers).get('Authorization')).toBe('Bearer admin-access');
     expect(JSON.parse(String(rpc?.init?.body))).toEqual({
@@ -143,6 +146,7 @@ describe('catalogue BFF', () => {
     const { deps, calls } = depsWith([
       jsonResponse({ id: 'employee-user', email: 'admin@example.test' }),
       jsonResponse([adminProfile('owner')]),
+      jsonResponse([{ branch_id: 'branch-main' }]),
       jsonResponse('category-server-id'),
     ]);
 
@@ -156,7 +160,7 @@ describe('catalogue BFF', () => {
 
     expect(response.status).toBe(200);
     expect((await response.json()).id).toBe('category-server-id');
-    expect(calls[2]?.url).toContain('/rest/v1/rpc/save_catalogue_category');
+    expect(calls[3]?.url).toContain('/rest/v1/rpc/save_catalogue_category');
   });
 
   it('rejects cross-origin catalogue mutations before authentication', async () => {

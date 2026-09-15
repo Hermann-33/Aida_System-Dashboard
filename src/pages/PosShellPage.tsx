@@ -6,11 +6,21 @@ import {
   subscribeEmployeeSession,
 } from '../auth/employeeSession';
 import type { ShiftSummary, TerminalLocation } from '../auth/types';
+import { fetchTerminalStatus } from '../auth/terminalCredential';
 import { PosContextBar } from '../components/PosContextBar';
 import { previewShiftRepository } from '../preview/repositories/previewShiftRepository';
 import { previewTerminalRepository } from '../preview/repositories/previewTerminalRepository';
 import { isUiPreviewMode } from '../preview/uiPreviewMode';
 import { CounterWorkspace } from '../features/pos/CounterWorkspace';
+import { LiveShiftControls } from '../features/shifts/LiveShiftControls';
+import {
+  closeTrustedShift,
+  fetchCurrentShift,
+  lockTrustedShift,
+  openTrustedShift,
+  resumeTrustedShift,
+  ShiftClientError,
+} from '../features/shifts/shiftClient';
 import type { ConnectionState } from '../preview/fixtures/catalog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -18,6 +28,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 type Phase = 'loading' | 'need-location' | 'need-shift' | 'ready' | 'closing' | 'closed';
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ShiftClientError) return error.message;
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
 
 export function PosShellPage() {
   const session = useSyncExternalStore(subscribeEmployeeSession, getEmployeeSession, getEmployeeSession);
@@ -38,35 +54,55 @@ export function PosShellPage() {
     setError('');
     setPhase('loading');
 
-    if (isUiPreviewMode()) {
-      const status = await previewTerminalRepository.getStatus();
+    try {
+      const preview = isUiPreviewMode();
+      const status = preview
+        ? await previewTerminalRepository.getStatus()
+        : await fetchTerminalStatus();
+
       if (!status.enrolled) {
-        setError('Terminal not registered — activate from Employee Access (preview).');
+        setError(
+          preview
+            ? 'Terminal not registered — activate from Employee Access (preview).'
+            : status.code === 'TERMINAL_BRANCH_FORBIDDEN'
+              ? 'Your employee account is not authorised for this terminal branch.'
+              : 'This terminal is not active. Sign out and enter a manager-issued activation code.',
+        );
+        setLocation(null);
+        setShift(null);
         setPhase('need-location');
         return;
       }
+
       const loc = status.location;
       const assigned = session.identity?.assignedBranchIds || [];
       if (assigned.length && !assigned.includes(loc.branchId) && session.identity?.role === 'staff') {
         setError('Unauthorised location for this employee');
         setLocation(null);
+        setShift(null);
         setPhase('need-location');
         return;
       }
+
       setLocation(loc);
-      const s = previewShiftRepository.getCurrent();
-      if (s) {
-        setShift(s);
-        setPhase(s.status === 'closed' ? 'closed' : 'ready');
-      } else {
+
+      const current = preview
+        ? previewShiftRepository.getCurrent()
+        : await fetchCurrentShift();
+
+      if (!current) {
         setShift(null);
         setPhase('need-shift');
+        return;
       }
-      return;
+
+      setShift(current);
+      setPhase(current.status === 'closed' ? 'closed' : 'ready');
+    } catch (loadError) {
+      setShift(null);
+      setError(errorMessage(loadError, 'Unable to load trusted terminal and shift authority.'));
+      setPhase('need-shift');
     }
-    setLocation(null);
-    setShift(null);
-    setPhase('ready');
   }, [session.identity?.assignedBranchIds, session.identity?.role]);
 
   useEffect(() => {
@@ -79,12 +115,21 @@ export function PosShellPage() {
     setError('');
     try {
       if (!location || !session.identity) {
-        setError('Preview terminal or employee missing');
+        setError('Terminal or employee context is missing.');
         return;
       }
-      const s = previewShiftRepository.open(location, session.identity.id, Number(openingFloat) || 0);
+      const amount = Number(openingFloat);
+      if (!Number.isFinite(amount) || amount < 0) {
+        setError('Opening float must be a valid non-negative amount.');
+        return;
+      }
+      const s = isUiPreviewMode()
+        ? previewShiftRepository.open(location, session.identity.id, amount)
+        : await openTrustedShift(amount);
       setShift(s);
       setPhase('ready');
+    } catch (openError) {
+      setError(errorMessage(openError, 'Unable to open shift.'));
     } finally {
       setBusy(false);
     }
@@ -93,8 +138,14 @@ export function PosShellPage() {
   async function lockShift() {
     if (!shift) return;
     setBusy(true);
+    setError('');
     try {
-      setShift(previewShiftRepository.lock());
+      const updated = isUiPreviewMode()
+        ? previewShiftRepository.lock()
+        : await lockTrustedShift(shift);
+      setShift(updated);
+    } catch (lockError) {
+      setError(errorMessage(lockError, 'Unable to lock shift.'));
     } finally {
       setBusy(false);
     }
@@ -103,8 +154,14 @@ export function PosShellPage() {
   async function resumeShift() {
     if (!shift) return;
     setBusy(true);
+    setError('');
     try {
-      setShift(previewShiftRepository.resume());
+      const updated = isUiPreviewMode()
+        ? previewShiftRepository.resume()
+        : await resumeTrustedShift(shift);
+      setShift(updated);
+    } catch (resumeError) {
+      setError(errorMessage(resumeError, 'Unable to resume shift.'));
     } finally {
       setBusy(false);
     }
@@ -120,10 +177,24 @@ export function PosShellPage() {
     setBusy(true);
     setError('');
     try {
-      const closed = previewShiftRepository.close(Number(expectedCash), Number(actualCash), notes || undefined, handoverNotes || undefined);
+      const actual = Number(actualCash);
+      if (!Number.isFinite(actual) || actual < 0) {
+        setError('Actual cash must be a valid non-negative amount.');
+        return;
+      }
+      const closed = isUiPreviewMode()
+        ? previewShiftRepository.close(Number(expectedCash), actual, notes || undefined, handoverNotes || undefined)
+        : await closeTrustedShift({
+          shift,
+          actualCashRm: actual,
+          notes: notes || undefined,
+          handoverNotes: handoverNotes || undefined,
+        });
       setShift(closed);
       setPhase('closed');
       setConfirmClose(false);
+    } catch (closeError) {
+      setError(errorMessage(closeError, 'Unable to close shift.'));
     } finally {
       setBusy(false);
     }
@@ -132,11 +203,24 @@ export function PosShellPage() {
   const identity = session.identity;
   const preview = isUiPreviewMode();
   const workspaceReady = identity && phase === 'ready'
-    && (!preview || Boolean(location && shift?.status === 'open'));
+    && Boolean(location)
+    && shift?.status === 'open';
+  const trustedExpectedCashRm = shift?.expectedCashSen === undefined
+    ? null
+    : shift.expectedCashSen / 100;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <PosContextBar employee={identity} location={location} shift={shift} connection={connectionState} operationalMode={preview ? 'preview' : 'live'} />
+      {!preview && identity && location && phase === 'ready' && shift?.status === 'open' && (
+        <LiveShiftControls
+          shift={shift}
+          busy={busy}
+          onShiftChange={setShift}
+          onLock={() => void lockShift()}
+          onCloseRequest={() => setPhase('closing')}
+        />
+      )}
       {workspaceReady ? (
         <CounterWorkspace
           employee={identity}
@@ -170,15 +254,17 @@ export function PosShellPage() {
 
               {phase === 'need-location' && (
                 <p role="alert" className="text-sm font-semibold text-destructive">
-                  Register this terminal from Employee Access before using POS.
+                  {preview
+                    ? 'Register this terminal from Employee Access before using POS.'
+                    : 'This terminal must be activated for your assigned branch before using POS.'}
                 </p>
               )}
 
-              {phase === 'need-shift' && (
+              {phase === 'need-shift' && location && (
                 <form onSubmit={openShift} className="flex flex-col gap-4">
                   <h3 className="text-lg font-bold text-foreground">Open shift</h3>
                   <p className="text-sm text-muted-foreground">
-                    Location is locked to {location?.salesPointCode} at {location?.branchCode}.
+                    Location is locked to {location.salesPointCode} at {location.branchCode}.
                   </p>
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="opening-float">Opening float (RM)</Label>
@@ -213,31 +299,44 @@ export function PosShellPage() {
               {phase === 'closing' && shift && (
                 <form onSubmit={closeShift} className="flex flex-col gap-4">
                   <h3 className="text-lg font-bold text-foreground">Close shift</h3>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="expected-cash">Expected cash</Label>
-                    <Input
-                      id="expected-cash"
-                      type="number"
-                      step="0.01"
-                      value={expectedCash}
-                      onChange={(e) => setExpectedCash(e.target.value)}
-                      required
-                    />
-                  </div>
+                  {preview ? (
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="expected-cash">Expected cash</Label>
+                      <Input
+                        id="expected-cash"
+                        type="number"
+                        step="0.01"
+                        value={expectedCash}
+                        onChange={(e) => setExpectedCash(e.target.value)}
+                        required
+                      />
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+                      <span className="font-semibold">Server expected cash:</span>{' '}
+                      RM {(trustedExpectedCashRm ?? 0).toFixed(2)}
+                    </div>
+                  )}
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="actual-cash">Actual cash</Label>
                     <Input
                       id="actual-cash"
                       type="number"
+                      min="0"
                       step="0.01"
                       value={actualCash}
                       onChange={(e) => setActualCash(e.target.value)}
                       required
                     />
                   </div>
-                  {expectedCash !== '' && actualCash !== '' && (
+                  {actualCash !== '' && (preview ? expectedCash !== '' : trustedExpectedCashRm !== null) && (
                     <p className="text-sm text-foreground">
-                      Variance: RM {(Number(actualCash) - Number(expectedCash)).toFixed(2)}
+                      Variance preview: RM {(Number(actualCash) - (preview ? Number(expectedCash) : trustedExpectedCashRm ?? 0)).toFixed(2)}
+                    </p>
+                  )}
+                  {!preview && identity?.role === 'staff' && actualCash !== '' && trustedExpectedCashRm !== null && Number(actualCash) !== trustedExpectedCashRm && (
+                    <p className="text-sm font-semibold text-destructive">
+                      Non-zero variance requires Admin approval. The server will reject an ordinary staff close.
                     </p>
                   )}
                   <div className="flex flex-col gap-2">

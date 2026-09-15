@@ -50,6 +50,19 @@ function actionLabel(next: OrderStatus): string {
   return 'Cancel order';
 }
 
+function legalActions(order: OrderSnapshot): readonly OrderStatus[] {
+  const next = LEGAL_NEXT_STATUSES[order.status];
+  if (order.tenderType === 'cash' && order.paymentState === 'paid') {
+    return next.filter((status) => status !== 'cancelled');
+  }
+  return next;
+}
+
+function paymentLabel(order: OrderSnapshot): string {
+  if (order.tenderType === 'cash' && order.paymentState === 'paid') return 'Cash paid';
+  return 'Unpaid';
+}
+
 type OrderCardProps = {
   order: OrderSnapshot;
   busy: boolean;
@@ -62,6 +75,7 @@ function OrderCard({ order, busy, onDetail, onTransition }: OrderCardProps) {
   const due = order.status === 'scheduled' && order.scheduleState === 'due';
   const itemCount = order.lines.reduce((sum, line) => sum + line.quantity, 0);
   const lateBy = lateness(order);
+  const actions = legalActions(order);
   return (
     <article className={`order-workload-card${urgent ? ' order-workload-card--overdue' : due ? ' order-workload-card--due' : ''}`}>
       <div className="flex min-w-0 flex-1 flex-col gap-3">
@@ -71,16 +85,20 @@ function OrderCard({ order, busy, onDetail, onTransition }: OrderCardProps) {
           {due && <span className="status-pill status-pill--warn">Due</span>}
           <span className={`status-pill ${STATUS_CLASS[order.status]}`}>{STATUS_LABEL[order.status]}</span>
         </div>
-        <dl className="grid grid-cols-2 gap-x-5 gap-y-2 text-sm sm:grid-cols-4">
+        <dl className="grid grid-cols-2 gap-x-5 gap-y-2 text-sm sm:grid-cols-5">
           <div><dt className="font-semibold text-muted-foreground">Pickup</dt><dd className="font-semibold text-foreground">{formatWhen(order.requestedPickupAt ?? order.createdAt, true)}</dd></div>
           {order.status === 'scheduled' && <div><dt className="font-semibold text-muted-foreground">Preparation</dt><dd className="font-semibold text-foreground">{urgent || due ? 'Due ' : 'At '}{formatWhen(order.prepareAt, true)}</dd></div>}
           <div><dt className="font-semibold text-muted-foreground">Order</dt><dd>{itemCount} item{itemCount === 1 ? '' : 's'} · {formatRmFromSen(order.totalSen)}</dd></div>
           <div><dt className="font-semibold text-muted-foreground">Source</dt><dd>{order.source === 'pos' ? 'POS guest' : 'Customer'}</dd></div>
+          <div><dt className="font-semibold text-muted-foreground">Tender</dt><dd>{paymentLabel(order)}</dd></div>
         </dl>
         {lateBy && <p className="text-sm font-bold text-[var(--aida-error)]">Pickup is {lateBy}. Start preparation or cancel the order.</p>}
+        {order.tenderType === 'cash' && order.paymentState === 'paid' && order.status !== 'completed' && order.status !== 'cancelled' && (
+          <p className="text-xs font-semibold text-muted-foreground">Paid cash orders cannot be cancelled until trusted refund authority exists.</p>
+        )}
       </div>
       <div aria-label={`Actions for order ${order.orderNumber}`} className="flex flex-wrap items-center gap-2 sm:justify-end">
-        {LEGAL_NEXT_STATUSES[order.status].map((next) => <Button key={next} type="button" variant={next === 'cancelled' ? 'outline' : 'default'} disabled={busy} onClick={() => onTransition(next)}>{actionLabel(next)}</Button>)}
+        {actions.map((next) => <Button key={next} type="button" variant={next === 'cancelled' ? 'outline' : 'default'} disabled={busy} onClick={() => onTransition(next)}>{actionLabel(next)}</Button>)}
         <Button type="button" variant="outline" onClick={onDetail}>Detail</Button>
       </div>
     </article>
@@ -125,10 +143,11 @@ export function OrderBoard() {
   const selectedOrder = detail.data ?? orders.data?.find((order) => order.id === selectedId) ?? null;
   const mutate = (order: OrderSnapshot, toStatus: OrderStatus) => transition.mutate({ order, toStatus });
   const cards = (items: OrderSnapshot[]) => <div className="mt-4 grid gap-3">{items.map((order) => <OrderCard key={order.id} order={order} busy={transition.isPending} onDetail={() => setSelectedId(order.id)} onTransition={(next) => mutate(order, next)} />)}</div>;
+  const selectedActions = selectedOrder ? legalActions(selectedOrder) : [];
 
   return (
     <section aria-labelledby="live-orders-title">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 id="live-orders-title" className="font-display text-xl text-primary">Orders</h2><p className="mt-1 text-sm text-muted-foreground">Live operational queue · refreshes every {ORDER_POLL_INTERVAL_MS / 1_000} seconds · pay at counter</p></div><Button type="button" variant="outline" size="sm" onClick={() => void orders.refetch()}>Refresh now</Button></div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 id="live-orders-title" className="font-display text-xl text-primary">Orders</h2><p className="mt-1 text-sm text-muted-foreground">Live operational queue · refreshes every {ORDER_POLL_INTERVAL_MS / 1_000} seconds · server-owned tender state</p></div><Button type="button" variant="outline" size="sm" onClick={() => void orders.refetch()}>Refresh now</Button></div>
       <Tabs value={view} onValueChange={(value) => setView(value as OrderWorkloadView)} className="mt-4"><TabsList aria-label="Order workload" className="h-auto w-full justify-start overflow-x-auto bg-muted p-1 sm:w-auto">{VIEWS.map(({ id, label }) => <TabsTrigger key={id} value={id} className="min-h-11 min-w-24">{label} <span aria-label={`${counts[id]} orders`} className="ml-1 rounded-full bg-card px-2 py-0.5 text-xs">{counts[id]}</span></TabsTrigger>)}</TabsList></Tabs>
       <div className="mt-4"><Label htmlFor="live-orders-search" className="sr-only">Search orders in current workload</Label><Input id="live-orders-search" type="search" placeholder="Order # or item…" value={query} onChange={(event) => setQuery(event.target.value)} className="max-w-[18rem]" /></div>
       {feedback && <p role="status" className="mt-3 rounded-lg border border-border bg-muted p-3 text-sm text-foreground">{feedback}</p>}
@@ -136,7 +155,7 @@ export function OrderBoard() {
       {orders.isError && <div role="alert" className="mt-4 rounded-lg border border-destructive/40 bg-destructive/5 p-4"><p className="text-sm font-semibold text-destructive">{orders.error.message}</p><p className="mt-1 text-sm text-muted-foreground">No preview orders are used as a fallback.</p><Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void orders.refetch()}>Retry orders</Button></div>}
       {orders.isSuccess && filtered.length === 0 && <p className="mt-4 rounded-xl border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">No persisted orders match this workload.</p>}
       {view === 'scheduled' ? (Object.entries(scheduledGroups) as [ScheduledDayGroup, OrderSnapshot[]][]).map(([group, groupOrders]) => groupOrders.length > 0 && <section key={group} aria-labelledby={`scheduled-${group.toLowerCase()}`} className="mt-5"><h3 id={`scheduled-${group.toLowerCase()}`} className="text-sm font-extrabold uppercase tracking-wide text-muted-foreground">{group}</h3>{cards(groupOrders)}</section>) : cards(filtered)}
-      {selectedOrder && <div role="region" aria-label="Live order detail" className="mt-5 rounded-xl border border-border bg-card p-5"><div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="text-lg font-bold text-foreground">Order #{selectedOrder.orderNumber}</h3><p className="text-sm text-muted-foreground">{STATUS_LABEL[selectedOrder.status]} · version {selectedOrder.statusVersion} · {formatRmFromSen(selectedOrder.totalSen)}</p></div><Button type="button" variant="outline" size="sm" onClick={() => setSelectedId(null)}>Close</Button></div><ul className="mt-4 flex flex-col gap-2 text-sm text-foreground">{selectedOrder.lines.map((line) => <li key={line.id ?? line.lineNumber}>{line.quantity}× {line.name}{line.variant ? ` · ${line.variant.label}` : ''}{line.addOns.length > 0 ? ` · ${line.addOns.map((addOn) => addOn.name).join(', ')}` : ''}</li>)}</ul><div aria-label="Legal order actions" className="mt-5 flex flex-wrap gap-2">{LEGAL_NEXT_STATUSES[selectedOrder.status].map((next) => <Button key={next} type="button" variant={next === 'cancelled' ? 'outline' : 'default'} disabled={transition.isPending} onClick={() => mutate(selectedOrder, next)}>{actionLabel(next)}</Button>)}{LEGAL_NEXT_STATUSES[selectedOrder.status].length === 0 && <p className="text-sm text-muted-foreground">This is a terminal order state; no further transition is available.</p>}</div></div>}
+      {selectedOrder && <div role="region" aria-label="Live order detail" className="mt-5 rounded-xl border border-border bg-card p-5"><div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="text-lg font-bold text-foreground">Order #{selectedOrder.orderNumber}</h3><p className="text-sm text-muted-foreground">{STATUS_LABEL[selectedOrder.status]} · version {selectedOrder.statusVersion} · {formatRmFromSen(selectedOrder.totalSen)} · {paymentLabel(selectedOrder)}</p></div><Button type="button" variant="outline" size="sm" onClick={() => setSelectedId(null)}>Close</Button></div><ul className="mt-4 flex flex-col gap-2 text-sm text-foreground">{selectedOrder.lines.map((line) => <li key={line.id ?? line.lineNumber}>{line.quantity}× {line.name}{line.variant ? ` · ${line.variant.label}` : ''}{line.addOns.length > 0 ? ` · ${line.addOns.map((addOn) => addOn.name).join(', ')}` : ''}</li>)}</ul><div aria-label="Legal order actions" className="mt-5 flex flex-wrap gap-2">{selectedActions.map((next) => <Button key={next} type="button" variant={next === 'cancelled' ? 'outline' : 'default'} disabled={transition.isPending} onClick={() => mutate(selectedOrder, next)}>{actionLabel(next)}</Button>)}{selectedActions.length === 0 && <p className="text-sm text-muted-foreground">{LEGAL_NEXT_STATUSES[selectedOrder.status].length === 0 ? 'This is a terminal order state; no further transition is available.' : 'No transition is available until a trusted refund workflow exists.'}</p>}</div></div>}
     </section>
   );
 }

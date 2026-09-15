@@ -24,15 +24,37 @@ vi.mock('./orderClient', async (importOriginal) => {
 function fixture(status: OrderSnapshot['status'] = 'confirmed'): OrderSnapshot {
   return {
     id: `order-${status}`, orderNumber: 100021, source: 'customer', customerUserId: 'customer-1', memberId: 'member-1',
+    branchId: 'branch-main', branch: { id: 'branch-main', code: 'BR-MAIN', name: 'Main Café', timezone: 'Asia/Kuala_Lumpur' },
+    salesPointId: null, salesPoint: null, terminalId: null, terminal: null,
+    shiftId: null, tenderType: 'unpaid', paymentState: 'unpaid', paidAt: null,
     fulfillmentType: 'asap', requestedPickupAt: null, prepareAt: null,
     serverNow: '2026-08-14T00:30:00Z', scheduleState: null, status, statusVersion: 4, currency: 'MYR', pricingVersion: 1,
-    subtotalSen: 1450, totalSen: 1450, createdAt: '2026-08-14T00:00:00Z', updatedAt: '2026-08-14T00:00:00Z',
+    subtotalSen: 1450, discountSen: 0, totalSen: 1450, voucher: null,
+    createdAt: '2026-08-14T00:00:00Z', updatedAt: '2026-08-14T00:00:00Z',
     statusUpdatedAt: '2026-08-14T00:00:00Z', preparingAt: null, readyAt: null, completedAt: null, cancelledAt: null,
     lines: [{
       id: 'line-1', lineNumber: 1, itemId: 'item-1', sku: 'CF-LAT', name: 'Latte', prepRoute: 'bar',
       basePriceSen: 1300, variant: null, addOns: [], addOnTotalSen: 0, options: [], optionTotalSen: 0, unitPriceSen: 1450,
       quantity: 1, lineTotalSen: 1450, note: null,
     }],
+  };
+}
+
+function cashFixture(status: OrderSnapshot['status'] = 'confirmed'): OrderSnapshot {
+  return {
+    ...fixture(status),
+    id: `cash-order-${status}`,
+    source: 'pos',
+    customerUserId: null,
+    memberId: null,
+    salesPointId: 'sales-main',
+    salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' },
+    terminalId: 'terminal-main',
+    terminal: { id: 'terminal-main', code: 'POS-MAIN-01' },
+    shiftId: 'shift-main',
+    tenderType: 'cash',
+    paymentState: 'paid',
+    paidAt: '2026-08-14T00:00:00Z',
   };
 }
 
@@ -55,6 +77,7 @@ describe('live staff order board', () => {
     expect(await screen.findByText('#100021')).toBeInTheDocument();
     expect(fetchOrders).toHaveBeenCalledWith(['scheduled', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled']);
     expect(screen.getByText(/refreshes every 2.5 seconds/i)).toBeInTheDocument();
+    expect(screen.getByText(/server-owned tender state/i)).toBeInTheDocument();
     expect(screen.queryByText(/preview history|void preview|refund preview/i)).not.toBeInTheDocument();
   });
 
@@ -80,6 +103,15 @@ describe('live staff order board', () => {
       expectedVersion: 4,
     });
     expect(screen.queryByRole('button', { name: /mark ready|complete fulfilment/i })).not.toBeInTheDocument();
+  });
+
+  it('does not present cancellation for a cash-paid order until trusted refund authority exists', async () => {
+    vi.mocked(fetchOrders).mockResolvedValue([cashFixture()]);
+    renderBoard();
+    expect(await screen.findByText(/cash paid/i)).toBeInTheDocument();
+    expect(screen.getByText(/cannot be cancelled until trusted refund authority exists/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /cancel order/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /start preparing/i })).toBeInTheDocument();
   });
 
   it('refetches and reports a concise stale-version conflict', async () => {

@@ -1,9 +1,11 @@
 import { useMemo, useState, type MutableRefObject } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatRmFromSen } from '../../shared/formatting/money';
 import type { CartLine } from '../pos/cartTypes';
+import { fetchPosMemberLoyalty, type PosMemberLoyalty } from '../loyalty/posLoyaltyClient';
 import {
   ORDER_QUERY_KEY,
   buildOrderIntent,
@@ -14,11 +16,15 @@ import {
   placeOrder,
   quoteOrder,
   type FulfillmentType,
+  type OrderIntentPayload,
+  type OrderPlacementPayload,
   type OrderQuote,
   type OrderSnapshot,
 } from './orderClient';
 
 export type PlacementAttempt = { signature: string; clientRequestId: string };
+type TenderType = 'cash' | 'unpaid';
+type PosLoyaltyIntent = OrderIntentPayload & { memberCode?: string; voucherId?: string };
 
 type Props = {
   lines: CartLine[];
@@ -43,21 +49,37 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
   const policy = useQuery({ queryKey: ['ordering-policy'], queryFn: () => fetchOrderingPolicy() });
   const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>('asap');
   const [requestedPickupAt, setRequestedPickupAt] = useState('');
+  const [tenderType, setTenderType] = useState<TenderType>('cash');
+  const [memberCode, setMemberCode] = useState('');
+  const [member, setMember] = useState<PosMemberLoyalty | null>(null);
+  const [voucherId, setVoucherId] = useState('');
   const [trustedQuote, setTrustedQuote] = useState<{ signature: string; quote: OrderQuote } | null>(null);
   const slots = useMemo(
     () => policy.data ? generateScheduleSlots(policy.data) : [],
     [policy.data],
   );
-  const intent = useMemo(
-    () => buildOrderIntent(lines, fulfillmentType, requestedPickupAt || undefined),
-    [fulfillmentType, lines, requestedPickupAt],
-  );
-  const signature = orderIntentSignature(intent);
-  const currentQuote = trustedQuote?.signature === signature ? trustedQuote.quote : null;
+  const intent = useMemo<PosLoyaltyIntent>(() => ({
+    ...buildOrderIntent(lines, fulfillmentType, requestedPickupAt || undefined),
+    ...(member ? { memberCode: member.memberCode } : {}),
+    ...(member && voucherId ? { voucherId } : {}),
+  }), [fulfillmentType, lines, member, requestedPickupAt, voucherId]);
+  const pricingSignature = orderIntentSignature(intent);
+  const signature = `${pricingSignature}|tender:${tenderType}`;
+  const currentQuote = trustedQuote?.signature === pricingSignature ? trustedQuote.quote : null;
+
+  const memberLookup = useMutation({
+    mutationFn: () => fetchPosMemberLoyalty(memberCode),
+    onSuccess: (result) => {
+      setMember(result);
+      setMemberCode(result.memberCode);
+      setVoucherId('');
+      setTrustedQuote(null);
+    },
+  });
 
   const quote = useMutation({
     mutationFn: () => quoteOrder(intent),
-    onSuccess: (result) => setTrustedQuote({ signature, quote: result }),
+    onSuccess: (result) => setTrustedQuote({ signature: pricingSignature, quote: result }),
   });
 
   const place = useMutation({
@@ -66,7 +88,12 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
       if (placementAttempt.current?.signature !== signature) {
         placementAttempt.current = { signature, clientRequestId: createClientRequestId() };
       }
-      return placeOrder({ ...intent, clientRequestId: placementAttempt.current.clientRequestId });
+      const payload = {
+        ...intent,
+        clientRequestId: placementAttempt.current.clientRequestId,
+        tenderType,
+      } as OrderPlacementPayload & { tenderType: TenderType; memberCode?: string; voucherId?: string };
+      return placeOrder(payload);
     },
     onSuccess: async (order) => {
       placementAttempt.current = null;
@@ -81,7 +108,7 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
     <section aria-labelledby="order-checkout-title" className="mx-auto max-w-2xl rounded-2xl border border-border bg-card p-5 shadow-sm">
       <h2 id="order-checkout-title" className="font-display text-xl text-primary">Review order</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        The server revalidates catalogue availability, options, scheduling and price before placement.
+        The server revalidates catalogue availability, options, scheduling, price, member, voucher, shift and tender before placement.
       </p>
 
       <fieldset className="mt-5">
@@ -134,16 +161,120 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
         </div>
       )}
 
-      <div className="mt-5 rounded-xl bg-muted p-4">
-        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Payment</p>
-        <p className="mt-1 text-lg font-bold text-foreground">Pay at counter</p>
-        <p className="text-sm text-muted-foreground">Order placement does not claim payment or settlement.</p>
-      </div>
+      <fieldset className="mt-5 rounded-xl border border-border p-4">
+        <legend className="px-1 text-xs font-bold uppercase tracking-wide text-muted-foreground">Member &amp; voucher</legend>
+        <div className="mt-2 flex flex-wrap items-end gap-2">
+          <div className="min-w-48 flex-1">
+            <Label htmlFor="pos-member-code">Member code</Label>
+            <Input
+              id="pos-member-code"
+              value={memberCode}
+              onChange={(event) => {
+                const nextCode = event.target.value.toUpperCase();
+                setMemberCode(nextCode);
+                if (member && nextCode.trim() !== member.memberCode) {
+                  setMember(null);
+                  setVoucherId('');
+                  setTrustedQuote(null);
+                  placementAttempt.current = null;
+                }
+              }}
+              placeholder="Member code"
+              autoComplete="off"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!memberCode.trim() || memberLookup.isPending || quote.isPending || place.isPending}
+            onClick={() => memberLookup.mutate()}
+          >
+            {memberLookup.isPending ? 'Looking up…' : member ? 'Refresh member' : 'Lookup member'}
+          </Button>
+          {member && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={quote.isPending || place.isPending}
+              onClick={() => {
+                setMember(null);
+                setMemberCode('');
+                setVoucherId('');
+                setTrustedQuote(null);
+                placementAttempt.current = null;
+              }}
+            >
+              Remove
+            </Button>
+          )}
+        </div>
+        {memberLookup.error && <p role="alert" className="mt-2 text-sm font-semibold text-destructive">{memberLookup.error.message}</p>}
+        {member && (
+          <div className="mt-3 rounded-lg bg-muted p-3">
+            <p className="text-sm font-semibold text-foreground">Member {member.memberCode}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {member.pointsBalance} points · {member.stampBalance}/{member.program.stampGoal} stamps · shift-bound lookup {member.shiftId.slice(0, 8)}…
+            </p>
+            <div className="mt-3">
+              <Label htmlFor="pos-voucher">Issued voucher</Label>
+              <select
+                id="pos-voucher"
+                value={voucherId}
+                onChange={(event) => {
+                  setVoucherId(event.target.value);
+                  setTrustedQuote(null);
+                  placementAttempt.current = null;
+                }}
+                className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+                disabled={quote.isPending || place.isPending}
+              >
+                <option value="">No voucher</option>
+                {member.vouchers.map((voucher) => (
+                  <option key={voucher.id} value={voucher.id}>
+                    {voucher.rewardName} · expires {new Date(voucher.expiresAt).toLocaleDateString('en-MY')}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                This selection is intent only. The server revalidates member ownership, voucher status, expiry and order eligibility.
+              </p>
+            </div>
+          </div>
+        )}
+      </fieldset>
+
+      <fieldset className="mt-5 rounded-xl bg-muted p-4">
+        <legend className="px-1 text-xs font-bold uppercase tracking-wide text-muted-foreground">Tender</legend>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant={tenderType === 'cash' ? 'default' : 'outline'}
+            onClick={() => setTenderType('cash')}
+          >
+            Cash paid now
+          </Button>
+          <Button
+            type="button"
+            variant={tenderType === 'unpaid' ? 'default' : 'outline'}
+            onClick={() => setTenderType('unpaid')}
+          >
+            Leave unpaid
+          </Button>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Cash is recorded by the server against the active shift. Card and e-wallet processor settlement remain outside Phase 2.
+        </p>
+      </fieldset>
 
       {currentQuote && (
         <div aria-live="polite" className="mt-5 rounded-xl border border-primary/30 bg-accent p-4">
           <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Authoritative server total</p>
           <p className="mt-1 text-2xl font-bold text-primary">{formatRmFromSen(currentQuote.totalSen)}</p>
+          {currentQuote.discountSen > 0 && (
+            <p className="mt-1 text-sm font-semibold text-[var(--aida-success)]">
+              Server discount {formatRmFromSen(currentQuote.discountSen)}
+            </p>
+          )}
           <p className="mt-1 text-sm text-muted-foreground">
             {currentQuote.lines.length} line{currentQuote.lines.length === 1 ? '' : 's'} · pricing version {currentQuote.pricingVersion}
           </p>
@@ -168,7 +299,7 @@ export function OrderCheckoutPanel({ lines, placementAttempt, onCancel, onPlaced
           disabled={!currentQuote || place.isPending}
           onClick={() => place.mutate()}
         >
-          {place.isPending ? 'Placing…' : 'Place order · Pay at counter'}
+          {place.isPending ? 'Placing…' : tenderType === 'cash' ? 'Place order · Record cash' : 'Place order · Unpaid'}
         </Button>
       </div>
     </section>
@@ -186,7 +317,12 @@ export function AuthoritativeOrderReceipt({ order, onNewSale }: { order: OrderSn
           : 'Now pickup'} · status {order.status}
       </p>
       <p className="mt-4 text-2xl font-bold text-foreground">{formatRmFromSen(order.totalSen)}</p>
-      <p className="mt-1 text-sm font-semibold text-muted-foreground">Pay at counter · unpaid settlement state</p>
+      {order.discountSen > 0 && (
+        <p className="mt-1 text-sm font-semibold text-[var(--aida-success)]">
+          Discount {formatRmFromSen(order.discountSen)}{order.voucher ? ` · ${order.voucher.rewardName}` : ''}
+        </p>
+      )}
+      <p className="mt-1 text-sm font-semibold text-muted-foreground">Tender and payment state persisted by the server.</p>
       <Button type="button" className="mt-5" onClick={onNewSale}>New sale</Button>
     </section>
   );
