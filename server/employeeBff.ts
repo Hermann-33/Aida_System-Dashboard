@@ -304,12 +304,52 @@ async function fetchProfile(
   return raw as ProfileRow;
 }
 
-function toEmployee(profile: ProfileRow): ServerEmployeeIdentity {
+function assertEmployeeProfile(profile: ProfileRow) {
   if (profile.disabled_at) {
     throw new HttpFailure(403, 'EMPLOYEE_DISABLED', 'Employee account is disabled', true);
   }
   if (profile.app_role === 'customer') {
     throw new HttpFailure(403, 'EMPLOYEE_ACCESS_FORBIDDEN', 'Employee access denied', true);
+  }
+}
+
+async function fetchAssignedBranchIds(
+  userId: string,
+  accessToken: string,
+  deps: EmployeeBffDependencies,
+): Promise<string[]> {
+  const { url, key, fetchImpl } = getConfig(deps);
+  const query = new URLSearchParams({
+    select: 'branch_id',
+    user_id: `eq.${userId}`,
+    order: 'assigned_at.asc',
+  });
+  const response = await fetchImpl(`${url}/rest/v1/employee_branch_assignments?${query}`, {
+    method: 'GET',
+    headers: upstreamHeaders(key, accessToken),
+  });
+  if (!response.ok) {
+    throw new HttpFailure(502, 'BRANCH_SCOPE_UNAVAILABLE', 'Employee branch scope is unavailable');
+  }
+  const rows = await response.json().catch(() => []);
+  if (!Array.isArray(rows)) {
+    throw new HttpFailure(502, 'BRANCH_SCOPE_INVALID', 'Employee branch scope returned invalid data');
+  }
+  const ids = rows
+    .map((row) => row && typeof row === 'object' ? (row as { branch_id?: unknown }).branch_id : null)
+    .filter((value): value is string => typeof value === 'string' && value.length > 0);
+  return [...new Set(ids)];
+}
+
+function toEmployee(profile: ProfileRow, assignedBranchIds: string[]): ServerEmployeeIdentity {
+  assertEmployeeProfile(profile);
+  if (profile.app_role === 'staff' && assignedBranchIds.length === 0) {
+    throw new HttpFailure(
+      403,
+      'EMPLOYEE_BRANCH_REQUIRED',
+      'Staff account has no branch assignment',
+      true,
+    );
   }
   const isAdmin = profile.app_role === 'admin' || profile.app_role === 'owner';
   return {
@@ -320,7 +360,7 @@ function toEmployee(profile: ProfileRow): ServerEmployeeIdentity {
     isGlobalManager: profile.app_role === 'owner',
     dualRolePosEnabled: false,
     selectedProduct: isAdmin ? 'admin' : 'pos',
-    assignedBranchIds: [],
+    assignedBranchIds,
     requiresProductSelection: false,
     authMethod: 'password',
   };
@@ -336,7 +376,9 @@ async function validateEmployeeAccess(
   if (user.email && profile.email.toLowerCase() !== user.email.toLowerCase()) {
     throw new HttpFailure(403, 'EMPLOYEE_ACCESS_FORBIDDEN', 'Employee access denied', true);
   }
-  return { employee: toEmployee(profile), appRole: profile.app_role };
+  assertEmployeeProfile(profile);
+  const assignedBranchIds = await fetchAssignedBranchIds(user.id, accessToken, deps);
+  return { employee: toEmployee(profile, assignedBranchIds), appRole: profile.app_role };
 }
 
 async function revokeSession(accessToken: string, deps: EmployeeBffDependencies): Promise<void> {
@@ -377,9 +419,11 @@ async function authenticateRequest(
   if (user.email && profile.email.toLowerCase() !== user.email.toLowerCase()) {
     throw new HttpFailure(403, 'EMPLOYEE_ACCESS_FORBIDDEN', 'Employee access denied', true);
   }
+  assertEmployeeProfile(profile);
+  const assignedBranchIds = await fetchAssignedBranchIds(user.id, accessToken, deps);
   return {
     accessToken,
-    employee: toEmployee(profile),
+    employee: toEmployee(profile, assignedBranchIds),
     appRole: profile.app_role,
     cookies: rotatedCookies,
   };

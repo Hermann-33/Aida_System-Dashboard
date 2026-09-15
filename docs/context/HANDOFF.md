@@ -1,151 +1,96 @@
 # Current Handoff
 
-Updated: 2026-08-23
+Updated: 2026-09-16
 
-## Task
+## Current boundary
 
-`TASK-MENU-CUSTOMIZATION-001 — per-drink option groups, per-line add-ons, Now terminology, and post-add navigation`
+Phases 1–7 are `COMPLETE` against their defined authority/validation/deployment boundaries. Phase 8 is `PARTIAL` and actively implementing read-only reporting/accounting/audit projections. Phase 9–10 remain frozen.
 
-**Verdict:** COMPLETE.
-
-Detailed implementation/validation evidence:
-
-`docs/context/MENU_CUSTOMIZATION_2026-08-23.md`
-
-Matching task branches:
-
-`codex/task-menu-customization-001-modifier-groups`
-
-No PR or merge was created by this closeout.
-
-## What changed
-
-### Customer
-
-- drink detail is catalogue-driven for Size, Temperature, Sweetness and compatible add-ons;
-- selected option/add-on state belongs to the individual cart line;
-- add-on catalogue rows/categories are hidden from normal customer browsing;
-- local cart estimates include variant + option + add-on deltas while server quote remains final authority;
-- order intents include `optionValueIds` but no trusted prices/totals;
-- unavailable options remain visible/disabled with explicit text/semantics;
-- `Add to cart` immediately returns to Menu;
-- checkout presentation says `Now`, while the backend wire value remains `asap`;
-- accepted policy-derived Schedule wheel remains intact.
-
-### Dashboard / POS
-
-- Admin can mark a product as a drink;
-- each drink option exposes editable customer label, price delta, availability and default;
-- every required group must have at least one available option and exactly one available default;
-- compatible add-ons remain per-product checkboxes;
-- POS maps variants + required Temperature/Sweetness + optional add-ons into per-line modifier state;
-- POS order payload includes `optionValueIds` only as selection IDs;
-- preview remains read-only; staff remains excluded from Admin.
-
-### Backend
-
-Live migrations:
+## Final Phase 7 evidence
 
 ```text
-20260822135421 add_drink_customization_catalogue
-20260822135602 integrate_drink_customizations_with_orders
-20260822141814 harden_drink_customization_indexes_and_rls
-20260822143542 grant_public_drink_customization_reads
+Aida_System             8f37d838fc4659a1e1d3a5dcae43887a796ca2be
+Aida_System-Dashboard   c70fc8cd39f447eb68a0470e657d121db5c0f90f
+Backend database audit #234   COMPLETE
+Customer release audit #314   COMPLETE
+Dashboard CI #149             COMPLETE
 ```
 
-Trusted additions:
+The final Dashboard gate includes lint, typecheck, unit tests, live POS browser regression, preview-isolation browser regression and production build.
 
-- `catalogue_items.is_drink`;
-- `catalogue_option_groups`;
-- `catalogue_option_values`;
-- `catalogue_item_option_values`;
-- `order_lines.option_total_sen`;
-- `order_line_options` immutable selected-option snapshots;
-- `pricingVersion=2` quote calculation includes option deltas.
+## Phase 7 live Supabase state
 
-The live quote definition supplies the configured available default for a required group when an older client omits an `optionValueId`, preserving rollout compatibility.
+Project `eswovqxqzfevcdwwcmuh` remains the shared AIDA backend.
 
-## Live closeout checks
-
-Checked on 2026-08-23:
+Canonical Phase 7 repository migrations:
 
 ```text
-catalogue revision         130
-drink products              11
-non-drink products           4
-add-ons                      4
-invalid required groups      0
-Iced Drinks with Hot on      0
+20260915100000_create_promotion_discount_authority.sql
+20260915101000_integrate_promotions_with_order_authority.sql
+20260915101100_normalize_phase7_nullable_voucher_quote.sql
 ```
 
-Public/authenticated function/table grants align with the intended RLS boundary. Ordinary authenticated users have no direct read grant on immutable `order_line_options`.
+Live applied-history entries:
 
-Supabase security advisor has one pre-existing WARN only: Leaked Password Protection Disabled. Performance findings are INFO-only unused indexes.
+```text
+20260915120917_create_promotion_discount_authority
+20260915121057_integrate_promotions_with_order_authority
+20260915121119_normalize_phase7_nullable_voucher_quote
+```
 
-## Executable validation
+Do not rewrite already-applied migration-service timestamps.
 
-### Customer
+## Phase 8 branch baseline
 
-Final validation commit:
+```text
+Aida_System             codex/phase-8-reporting-accounting-audit
+  starts from 8f37d838fc4659a1e1d3a5dcae43887a796ca2be
 
-`404662aec382364c8e70fcee8d66b38d4b303f0a`
+Aida_System-Dashboard   codex/phase-8-reporting-accounting-audit
+  starts from c70fc8cd39f447eb68a0470e657d121db5c0f90f
+```
 
-Results:
+The detailed plan is `docs/context/PHASE_8_REPORTING_ACCOUNTING_AUDIT_PLAN_2026-09-16.md`.
 
-- Flutter 3.44.7 / Dart 3.12.2 / JDK 21.0.12;
-- `flutter pub get` PASS;
-- format PASS;
-- analyze PASS;
-- Flutter tests 55 passed / 0 failed / 0 skipped;
-- `git diff --check` PASS;
-- secret scan PASS;
-- UI/golden review PASS at 390x844 and 430x932;
-- no physical Android device was connected for this final pass.
+## Phase 8 implementation order
 
-### Dashboard
+1. Establish narrow caller-bound reporting/audit RPCs over trusted Phase 1–7 facts.
+2. Add blocking SQL authorization/reconciliation/pagination regressions.
+3. Preserve all existing Phase 1–7 database and contention gates.
+4. Add Dashboard same-origin reporting BFF + strict client/parser contract.
+5. Replace production fixture use in Executive Dashboard, Sales & Performance, Transactions and Audit pages.
+6. Preserve preview fixture isolation and prove no privileged reporting calls in preview.
+7. Deploy canonical Phase 8 migrations only after repository gates are green.
+8. Run fresh live Supabase security/performance advisors and synchronize closeout docs.
+9. Run Astra audit before Phase 9.
 
-Final validation commit:
+## Reporting semantics
 
-`af0fcd2babfa02073f882ec63ddbec102e591672`
+Phase 8 is operational reporting/reconciliation, not invented statutory accounting.
 
-Results:
+Use persisted facts for accepted order totals, separate voucher/promotion discounts, topology, shifts/cash, loyalty applications and inventory movements. Do not manufacture VAT/SST, profit, COGS, processor settlement or refund facts that are not authoritatively stored.
 
-- Node v24.11.1 / npm 11.6.2;
-- `npm ci` PASS, 0 vulnerabilities;
-- lint PASS with two established Fast Refresh warnings;
-- typecheck PASS;
-- Vitest 29 files / 129 tests PASS;
-- build PASS with existing large-chunk advisory only;
-- Playwright 10/10 PASS;
-- `git diff --check` PASS;
-- visual QA PASS at 1366x768 and 1440x900;
-- no task-related browser console errors/warnings.
+Any missing audit/report fact must be represented as unavailable/incomplete rather than inferred from preview data.
 
-## UI consistency
+## Security invariants
 
-Customer customization keeps the accepted AIDA rose/cream/espresso palette, Playfair + Plus Jakarta Sans, tactile/neumorphic controls, existing hero/sheet hierarchy, selected check indicators and explicit disabled text.
+- reporting is read-only;
+- Admin/Owner and branch scope are server-enforced;
+- Dashboard keeps HttpOnly employee session + same-origin BFF + caller JWT forwarding;
+- no service-role browser path;
+- no browser-readable reusable employee/terminal credential;
+- no widened direct table grants for convenience;
+- preview never contacts privileged report RPCs;
+- avoid unnecessary customer PII in reports.
 
-Dashboard uses the existing design tokens, Admin cards/form classes, labelled native radios/checkboxes, focus-visible/reduced-motion behavior and existing POS modifier density. No Luckin styling or second theme was introduced.
+## Apple boundary
 
-## Security/trust result
+Phase 8 does not introduce digital entitlements, StoreKit/IAP, tracking SDKs or protected-device permissions. It reports operational facts for physical café goods. Phase 9 owns payment/refund integrations; final App Store submission remains Phase 10.
 
-Preserved:
+## Merge governance
 
-- Supabase commercial authority;
-- RLS/FORCE-RLS boundaries;
-- Admin/Owner catalogue mutation;
-- caller-JWT same-origin HttpOnly employee BFF;
-- no browser employee token persistence;
-- no service-role credential in clients;
-- no fabricated branch/terminal/shift authority;
-- Pay-at-counter remains unpaid presentation, not payment settlement.
+Phase 7 PRs remain draft/unmerged. Phase 8 work must also remain draft/unmerged until explicit owner authorization. Phase 8 completion does not itself authorize Phase 9 or merge.
 
-## Next action
+## Immediate next action
 
-This task is ready for repository merge/release handling, but those are separate explicit actions. If merging, merge both matching task branches so the two frontends remain contract-compatible with the already-live backend.
-
-After a customer merge, build a fresh APK from the merged customer default branch before distribution. The final Codex validation did not use a connected physical Android device.
-
-## Deferred domains
-
-Branch authority/capacity, terminal/sales-point lifecycle, shifts/cash reconciliation, payment/refunds, loyalty, inventory, promotions/discounts, tax/accounting/reporting, delivery and hosted production operations remain separate tasks.
+Implement and test the first Phase 8 reporting/audit Supabase RPC contract before wiring Dashboard production pages.

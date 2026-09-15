@@ -52,4 +52,16 @@ export interface ShiftSummary {
   closedAt?: string | null;
   notes?: string | null;
   handoverNotes?: string | null;
+
+  /** Trusted live authority fields. Preview fixtures may omit them. */
+  statusVersion?: number;
+  operatorUserId?: string;
+  canOperate?: boolean;
+  openingFloatSen?: number;
+  expectedCashSen?: number;
+  cashInSen?: number;
+  cashOutSen?: number;
+  cashSalesSen?: number;
+  closingActualCashSen?: number | null;
+  cashVarianceSen?: number | null;
 }

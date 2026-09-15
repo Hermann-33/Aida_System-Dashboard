@@ -1,183 +1,68 @@
 # Supabase Status
 
-**Status date:** 2026-08-23
-**Project:** Aida System
-**Ref:** `eswovqxqzfevcdwwcmuh`
-**Region:** `ap-southeast-1`
+**Status date:** 2026-09-15  
+**Project:** Aida System  
+**Ref:** `eswovqxqzfevcdwwcmuh`  
+**Region:** `ap-southeast-1`  
+**Current state:** `ACTIVE_HEALTHY`  
+**Current verdict:** Phase 7 live deployment/advisor boundary `COMPLETE`.
 
-## Current live snapshot
+Canonical executable migrations live only in `Hermann-33/Aida_System/supabase/migrations/`.
 
-Supabase remains the shared trusted backend for the Flutter customer app and React Dashboard/Admin/POS.
+## Phase 7 live deployment
 
-Current catalogue observation:
-
-```text
-catalogue revision         130
-drink products              11
-non-drink products           4
-add-ons                      4
-invalid required groups      0
-Iced Drinks with Hot on      0
-```
-
-These counts are operational observations, not schema invariants.
-
-## Applied migration tail
-
-Current live migration history includes:
+Canonical repository migrations:
 
 ```text
-20260812152607 create_shared_catalogue
-20260812154805 harden_catalogue_rls_policies
-20260812182212 create_authoritative_orders_and_scheduling
-20260812183029 index_order_foreign_keys
-20260820151421 add_scheduled_order_preparation_window
-20260820214041 refresh_catalogue_product_images
-20260820221139 replace_americano_catalogue_image
-20260822135421 add_drink_customization_catalogue
-20260822135602 integrate_drink_customizations_with_orders
-20260822141814 harden_drink_customization_indexes_and_rls
-20260822143542 grant_public_drink_customization_reads
+20260915100000_create_promotion_discount_authority.sql
+20260915101000_integrate_promotions_with_order_authority.sql
+20260915101100_normalize_phase7_nullable_voucher_quote.sql
 ```
 
-Canonical executable migration files live only under the customer repository `supabase/migrations/` directory unless an accepted ADR changes ownership.
-
-## Identity / employee boundary
-
-Trusted identity remains Supabase Auth plus:
-
-- `user_profiles.app_role` / `disabled_at` for employee/Admin authorization;
-- `members` for customer membership identity.
-
-Public signup cannot self-assign privileged roles/member codes. Dashboard privileged browser flows continue through the same-origin HttpOnly employee BFF using the authenticated caller JWT; no service-role/browser bearer-token architecture is introduced by menu customization.
-
-## Catalogue authority
-
-Core catalogue resources now include:
-
-- `catalogue_categories`;
-- `catalogue_items` including `is_drink`;
-- `catalogue_item_variants`;
-- `catalogue_item_addons`;
-- `catalogue_option_groups`;
-- `catalogue_option_values`;
-- `catalogue_item_option_values`;
-- `catalogue_revision`;
-- `catalogue_audit_events`.
-
-Supabase remains authoritative for item/category publication, availability, UUIDs, integer-sen prices, variant ownership, compatible add-ons and drink-option configuration.
-
-Current standard drink groups:
+Migration-service live history:
 
 ```text
-Temperature
-- Hot
-- Iced
-
-Sweetness
-- Regular
-- Less sweet
-- Least sweet
+20260915120917_create_promotion_discount_authority
+20260915121057_integrate_promotions_with_order_authority
+20260915121119_normalize_phase7_nullable_voucher_quote
 ```
 
-Per-item option configuration can override the customer label, price delta, availability, default and sort order. Every live required group currently has at least one available option and exactly one available default.
+The live versions are historical deployment identifiers generated when the canonical SQL was applied. Do not rewrite applied migration history to force timestamp equality with repository filenames.
 
-The existing `Iced Drinks` products currently expose Iced as available/default and Hot as unavailable.
+## Live verification
 
-Anonymous/public catalogue reads have the required table grants plus RLS for option catalogue data. Admin/Owner mutation remains behind `save_catalogue_item(jsonb)` and the trusted role boundary.
+Post-deployment verification confirmed:
 
-## Order / modifier authority
+- `promotions`, `promotion_branches`, `promotion_items`, `promotion_variants`, `promotion_addons`, `promotion_order_applications` exist;
+- every Phase 7 table has RLS enabled and FORCE RLS enabled;
+- `anon` has no direct SELECT/INSERT privilege on Phase 7 tables;
+- `authenticated` has no direct SELECT/INSERT/UPDATE/DELETE privilege on Phase 7 tables;
+- `get_promotion_admin_state`, `save_promotion`, `quote_order`, customer placement and POS placement functions are present;
+- expected authenticated/anon execute grants are present on public RPC boundaries;
+- the old `orders_consume_pending_voucher` trigger is retired;
+- zero promotion rows and zero promotion application rows existed immediately after deployment verification, so no production fixture data was introduced.
 
-Current order resources include:
+The SQL inspection connector runs as `supabase_read_only_user` and cannot switch to `anon`, so it cannot directly execute the public app RPC despite the app-role grants being present. Runtime RPC behavior remains covered by the blocking local database and client/browser regressions; live verification intentionally avoided creating production test orders/promotions.
 
-- `order_schedule_settings`;
-- `orders`;
-- `order_lines` including `option_total_sen`;
-- `order_line_addons`;
-- `order_line_options`;
-- `order_events`.
+## Fresh advisors after Phase 7 DDL
 
-`order_line_options` is an immutable historical snapshot surface for selected option group/value IDs, group/value labels and price deltas. Ordinary authenticated users have no direct table read grant; authorized order snapshots expose permitted data through the trusted order functions.
+### Security
 
-Order selection payloads may include:
+- INFO `rls_enabled_no_policy` appears on the six Phase 7 RPC-only promotion tables and the existing RPC-only loyalty tables. This is intentional because direct table grants are revoked and access is through controlled RPCs.
+- The only WARN is the existing `auth_leaked_password_protection` setting being disabled. This pre-dates Phase 7 and is a Supabase Auth configuration item, not a Phase 7 schema defect.
+- Remediation reference: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
+
+### Performance
+
+- Advisor output contains INFO `unused_index` findings only, including newly created Phase 7 indexes before production usage accumulates.
+- No blocking missing-index or other performance warning was reported.
+
+## Repository validation paired with live state
 
 ```text
-itemId
-variantId
-addOnIds[]
-optionValueIds[]
-quantity
-note
+Backend database audit #231   COMPLETE
+Customer release audit #311   COMPLETE
+Dashboard CI #147             COMPLETE
 ```
 
-`quote_order(jsonb)` remains authoritative for validation and pricing. The deployed implementation returns `pricingVersion=2` and computes authoritative unit price from base + variant + options + compatible add-ons.
-
-When an older client omits a required option group, the live function definition resolves that group's configured available default. This provides rollout compatibility without moving authority into the client.
-
-## Scheduling policy
-
-Live policy verified 2026-08-23:
-
-```text
-timezone                 Asia/Kuala_Lumpur
-schedule_enabled         true
-minimum_lead_minutes     15
-preparation_lead_minutes 15
-slot_interval_minutes    15
-maximum_advance_days     7
-```
-
-Scheduled operational classification remains server-owned through immutable `prepare_at`, `serverNow` and `scheduleState`; no menu-customization change altered the accepted fulfilment-state machine.
-
-## Realtime
-
-`supabase_realtime` continues to publish the intended mutable signals:
-
-- `catalogue_revision` for catalogue invalidation/refetch;
-- `orders` for authorized customer order invalidation/refetch.
-
-Dashboard employee clients still use same-origin BFF polling/refetch rather than exposing the HttpOnly employee JWT to React.
-
-## TASK-MENU-CUSTOMIZATION-001 verification
-
-Live checks on 2026-08-23 proved:
-
-- 11 drink products and 4 add-ons are present;
-- no required drink group lacks an available default;
-- no current `Iced Drinks` product has Hot enabled;
-- anonymous can execute `get_catalogue()` and `quote_order(jsonb)`;
-- authenticated can execute `quote_order(jsonb)`;
-- anonymous/authenticated option-catalogue read grants are present;
-- ordinary authenticated users have no direct `order_line_options` read grant.
-
-The inspection connector itself uses a read-only database role and cannot impersonate `anon`, so final closeout did not create a synthetic production order merely to exercise quote/place. The deployed function definitions and executable client suites were inspected instead.
-
-Detailed evidence: `docs/context/MENU_CUSTOMIZATION_2026-08-23.md`.
-
-## Advisor state
-
-Security advisor currently reports one pre-existing WARN only:
-
-- `auth_leaked_password_protection` — Leaked Password Protection Disabled.
-
-Remediation: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
-
-No new security WARN/ERROR is attributed to TASK-MENU-CUSTOMIZATION-001.
-
-Performance advisor findings are INFO-only unused indexes, including recent FK-supporting customization indexes on the small current dataset. Do not remove those indexes solely to clear an unused-index INFO result.
-
-## Explicitly deferred backend authority
-
-Still not implemented as trusted live domains:
-
-- branch-specific opening hours/closures/capacity;
-- branch-scoped staff/order visibility;
-- terminal/sales-point authority;
-- shifts/cash reconciliation;
-- payment/refunds;
-- loyalty earning/redemption;
-- inventory depletion;
-- promotions/discounts;
-- tax/accounting/reporting;
-- delivery;
-- hosted production operations.
+Phases 1–7 are now `COMPLETE` against the defined boundary. Phase 8–10 remain frozen pending explicit owner authorization.
