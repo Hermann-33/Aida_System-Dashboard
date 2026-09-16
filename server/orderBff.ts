@@ -18,6 +18,7 @@ type EmployeeSession = {
 };
 
 const ACCESS_COOKIE = 'aida_employee_access';
+const TERMINAL_COOKIE = 'aida_terminal_credential';
 const ORDER_STATUSES = new Set([
   'confirmed',
   'scheduled',
@@ -312,10 +313,28 @@ export async function handleEmployeePlaceOrder(
 
   const auth = await requireEmployee(request, deps);
   if (auth instanceof Response) return auth;
+
+  const terminalCredential = parseCookie(request, TERMINAL_COOKIE);
+  if (!terminalCredential) {
+    return json(
+      { error: 'Activate this terminal before placing POS orders', code: 'TERMINAL_ENROLMENT_REQUIRED' },
+      403,
+      auth.responseCookies,
+    );
+  }
+
   const payload = await readObject(request);
   if (payload instanceof Response) return payload;
 
-  const upstream = await rpc('place_pos_order', { p_payload: payload }, auth.accessToken, deps);
+  const upstream = await rpc(
+    'place_pos_order',
+    {
+      p_payload: payload,
+      p_terminal_credential: terminalCredential,
+    },
+    auth.accessToken,
+    deps,
+  );
   if (!upstream.ok) {
     return upstreamFailure(upstream, auth.responseCookies, 'Order placement failed');
   }
