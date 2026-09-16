@@ -44,7 +44,10 @@ export function AdminAuditPage() {
     return () => { active = false; };
   }, [preview, from, to, page]);
 
-  const sourceRows = preview ? PREVIEW_EVENTS : report?.items ?? [];
+  const sourceRows = useMemo(
+    () => preview ? PREVIEW_EVENTS : report?.items ?? [],
+    [preview, report],
+  );
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return sourceRows;
