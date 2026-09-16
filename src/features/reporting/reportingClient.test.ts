@@ -4,12 +4,17 @@ import { loadAuditReport, loadReportingSummary, loadTransactionReport } from './
 afterEach(() => vi.unstubAllGlobals());
 
 function response(data: unknown, ok = true) {
-  return Promise.resolve(new Response(JSON.stringify(ok ? { data } : { error: 'denied' }), { status: ok ? 200 : 403, headers: { 'Content-Type': 'application/json' } }));
+  return Promise.resolve(new Response(JSON.stringify(ok ? { data } : { error: 'denied' }), {
+    status: ok ? 200 : 403,
+    headers: { 'Content-Type': 'application/json' },
+  }));
 }
 
 describe('Phase 8 reporting client', () => {
   it('loads summary through the same-origin BFF with bounded filter intent', async () => {
-    const fetchMock = vi.fn(() => response({ filter: { fromDate: '2026-09-16', toDate: '2026-09-16' }, orders: {} }));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => (
+      response({ filter: { fromDate: '2026-09-16', toDate: '2026-09-16' }, orders: {} })
+    ));
     vi.stubGlobal('fetch', fetchMock);
     const result = await loadReportingSummary({ fromDate: '2026-09-16', toDate: '2026-09-16', branchId: 'branch-1' });
     expect(result.filter).toBeTruthy();
