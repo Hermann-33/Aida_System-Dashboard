@@ -69,6 +69,20 @@ export function AdminSalesPerformancePage() {
     cancelledOrderCount: summary.orders.cancelledOrderCount,
   } : null;
 
+  const paymentMetrics = preview ? {
+    capturedOrderCount: sample.acceptedOrderCount,
+    grossCapturedSen: sample.acceptedOrderValueSen,
+    cashCapturedSen: sample.paidPosCashSen,
+    externalCapturedSen: Math.max(0, sample.acceptedOrderValueSen - sample.paidPosCashSen),
+    pendingExternalSen: 0,
+    succeededRefundSen: 0,
+    cashRefundedSen: 0,
+    externalRefundedSen: 0,
+    netCapturedAfterRefundSen: sample.acceptedOrderValueSen,
+    refundReconciled: true,
+    externalSettlement: { settledSen: 0, pendingSen: 0, failedSen: 0, notReportedSen: 0 },
+  } : summary?.payments ?? null;
+
   const productRows = preview
     ? PREVIEW_MENU.slice(0, 6).map((item, index) => ({
         itemId: item.id,
@@ -85,7 +99,7 @@ export function AdminSalesPerformancePage() {
       title="Sales & Performance"
       hint={preview
         ? 'UI preview sample reporting — not production authority.'
-        : 'Operational order-value reporting. Processor settlement, refunds and statutory accounting are outside Phase 8.'}
+        : 'Accepted order value, payment capture and refunds are separate source-backed facts. Statutory accounting remains outside this report.'}
     >
       <div className="admin-filters">
         <label>
@@ -156,24 +170,46 @@ export function AdminSalesPerformancePage() {
           </TabsContent>
 
           <TabsContent value="payments">
-            <div className="metric-grid">
-              <MetricCard label="Paid POS cash" value={formatRmFromSen(metrics.paidPosCashSen)} hint="Trusted paid cash fact" />
-              <MetricCard label="Unpaid accepted value" value={formatRmFromSen(metrics.unpaidAcceptedOrderValueSen)} hint="Not treated as processor settlement" />
-            </div>
-            <div className="empty-state">
-              <h2 className="admin-section-title">Processor payment reporting is not available yet</h2>
-              <p>Card/e-wallet authorization, capture, settlement and provider reconciliation belong to Phase 9. Phase 8 does not infer those states.</p>
-            </div>
+            {paymentMetrics && (
+              <>
+                <div className="metric-grid">
+                  <MetricCard label="Gross captured" value={formatRmFromSen(paymentMetrics.grossCapturedSen)} hint="Capture/paid fact, not settlement" />
+                  <MetricCard label="Cash captured" value={formatRmFromSen(paymentMetrics.cashCapturedSen)} />
+                  <MetricCard label="External captured" value={formatRmFromSen(paymentMetrics.externalCapturedSen)} />
+                  <MetricCard label="Pending external" value={formatRmFromSen(paymentMetrics.pendingExternalSen)} hint="Not captured or settled" />
+                  <MetricCard label="Net captured after refunds" value={formatRmFromSen(paymentMetrics.netCapturedAfterRefundSen)} />
+                  <MetricCard label="Unpaid accepted value" value={formatRmFromSen(metrics.unpaidAcceptedOrderValueSen)} hint="Accepted value without captured payment" />
+                </div>
+                {!preview && (
+                  <section className="admin-section">
+                    <h2 className="admin-section-title">External settlement state</h2>
+                    <div className="metric-grid">
+                      <MetricCard label="Settled" value={formatRmFromSen(paymentMetrics.externalSettlement.settledSen)} />
+                      <MetricCard label="Settlement pending" value={formatRmFromSen(paymentMetrics.externalSettlement.pendingSen)} />
+                      <MetricCard label="Settlement failed" value={formatRmFromSen(paymentMetrics.externalSettlement.failedSen)} />
+                      <MetricCard label="Settlement not reported" value={formatRmFromSen(paymentMetrics.externalSettlement.notReportedSen)} />
+                    </div>
+                    <p className="form-hint">Capture is not treated as settlement. These buckets reflect only persisted provider settlement-state facts.</p>
+                  </section>
+                )}
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="voids">
             <div className="metric-grid">
               <MetricCard label="Cancelled orders" value={String(metrics.cancelledOrderCount)} hint="Excluded from accepted commercial totals" />
+              {paymentMetrics && <MetricCard label="Succeeded refunds" value={formatRmFromSen(paymentMetrics.succeededRefundSen)} hint="Compensation against captured/paid value" />}
+              {paymentMetrics && <MetricCard label="Cash refunds" value={formatRmFromSen(paymentMetrics.cashRefundedSen)} />}
+              {paymentMetrics && <MetricCard label="External refunds" value={formatRmFromSen(paymentMetrics.externalRefundedSen)} />}
             </div>
-            <div className="empty-state">
-              <h2 className="admin-section-title">Refund facts are unavailable in Phase 8</h2>
-              <p>Refund amounts and processor refund states will appear only after Phase 9 establishes trusted refund authority. No sample refund values are shown as production facts.</p>
-            </div>
+            {!preview && paymentMetrics && (
+              <div className="empty-state">
+                <h2 className="admin-section-title">Refund reconciliation</h2>
+                <p>{paymentMetrics.refundReconciled ? 'Succeeded refund totals reconcile to protected order refund projections.' : 'Refund reconciliation mismatch detected; investigate before relying on net payment figures.'}</p>
+                <p>Accepted order value remains immutable and is not reduced by refund reporting.</p>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="staff">
