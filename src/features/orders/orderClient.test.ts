@@ -58,6 +58,32 @@ const baseOrderSnapshot = {
   completedAt: null, cancelledAt: null, lines: [validSnapshotLine],
 };
 
+function unpaidPayment(totalSen: number) {
+  return {
+    tenderType: 'unpaid' as const,
+    paymentState: 'unpaid' as const,
+    paidAt: null,
+    refundedSen: 0,
+    refundableSen: totalSen,
+    providerAvailable: false,
+    latestIntent: null,
+    refunds: [],
+  };
+}
+
+function cashPayment(totalSen: number, paidAt = '2026-08-20T12:00:00Z') {
+  return {
+    tenderType: 'cash' as const,
+    paymentState: 'paid' as const,
+    paidAt,
+    refundedSen: 0,
+    refundableSen: totalSen,
+    providerAvailable: false,
+    latestIntent: null,
+    refunds: [],
+  };
+}
+
 const validQuote = {
   pricingVersion: 2,
   currency: 'MYR' as const,
@@ -155,7 +181,7 @@ describe('order client trust boundary', () => {
       code: 'AIDA-V-TEST', rewardCode: 'POINTS_RM5', rewardName: 'RM5 Voucher',
       rewardType: 'fixed_amount' as const, discountSen: 500, appliedAt: '2026-08-20T12:00:00Z',
     };
-    expect(parseOrderSnapshot({ ...baseOrderSnapshot, voucherDiscountSen: 500, promotionDiscountSen: 100, discountSen: 600, totalSen: 850, voucher, promotions: [appliedPromotion] }))
+    expect(parseOrderSnapshot({ ...baseOrderSnapshot, voucherDiscountSen: 500, promotionDiscountSen: 100, discountSen: 600, totalSen: 850, payment: unpaidPayment(850), voucher, promotions: [appliedPromotion] }))
       .toMatchObject({ discountSen: 600, voucher: { rewardCode: 'POINTS_RM5' }, promotions: [{ code: 'P7_RM1' }] });
     expect(() => parseOrderSnapshot({ ...baseOrderSnapshot, promotionDiscountSen: 100, discountSen: 100, totalSen: 1350, promotions: [{ ...appliedPromotion, appliedAt: 'bad' }] }))
       .toThrow(/promotion commercial snapshot/i);
@@ -200,7 +226,7 @@ describe('order client trust boundary', () => {
   });
 
   it('accepts server-owned cash payment authority and rejects cash claims without a shift', async () => {
-    const cashOrder = { ...baseOrderSnapshot, source: 'pos' as const, customerUserId: null, memberId: null, salesPointId: 'sales-main', salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' }, terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' }, shiftId: 'shift-main', tenderType: 'cash' as const, paymentState: 'paid' as const, paidAt: '2026-08-20T12:00:00Z' };
+    const cashOrder = { ...baseOrderSnapshot, source: 'pos' as const, customerUserId: null, memberId: null, salesPointId: 'sales-main', salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' }, terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' }, shiftId: 'shift-main', tenderType: 'cash' as const, paymentState: 'paid' as const, paidAt: '2026-08-20T12:00:00Z', payment: cashPayment(1450) };
     vi.mocked(employeeFetch)
       .mockResolvedValueOnce(new Response(JSON.stringify([cashOrder])))
       .mockResolvedValueOnce(new Response(JSON.stringify([{ ...cashOrder, shiftId: null }])));
