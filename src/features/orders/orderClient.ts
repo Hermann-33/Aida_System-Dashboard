@@ -1,13 +1,19 @@
 import { employeeFetch } from '../../auth/employeeSession';
 import type { CartLine } from '../pos/cartTypes';
+import {
+  parsePaymentSnapshot,
+  type PaymentSnapshot,
+  type PaymentTenderType,
+  type OrderPaymentState,
+} from '../payments/paymentClient';
 
 export const ORDER_QUERY_KEY = ['employee-orders'] as const;
 export const ORDER_POLL_INTERVAL_MS = 2_500;
 
 export type FulfillmentType = 'asap' | 'scheduled';
 export type ScheduleState = 'future' | 'due' | 'overdue';
-export type TenderType = 'unpaid' | 'cash';
-export type PaymentState = 'unpaid' | 'paid';
+export type TenderType = PaymentTenderType;
+export type PaymentState = OrderPaymentState;
 export type OrderStatus =
   | 'confirmed'
   | 'scheduled'
@@ -191,6 +197,8 @@ export type OrderSnapshot = {
   promotionDiscountSen: number;
   discountSen: number;
   totalSen: number;
+  refundedSen: number;
+  payment: PaymentSnapshot;
   voucher: OrderVoucherSnapshot | null;
   promotions: OrderPromotionSnapshot[];
   createdAt: string;
@@ -474,6 +482,8 @@ export function parseOrderQuote(value: unknown): OrderQuote {
     || !isNonNegativeInteger(value.promotionDiscountSen)
     || !isNonNegativeInteger(value.discountSen)
     || !isNonNegativeInteger(value.totalSen)
+    || !isNonNegativeInteger(value.refundedSen)
+    || !isRecord(value.payment)
     || !Array.isArray(value.promotions)
     || (value.fulfillmentType !== 'asap' && value.fulfillmentType !== 'scheduled')
     || !isNullableTimestamp(value.requestedPickupAt)
@@ -528,8 +538,8 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
     || typeof value.branch.name !== 'string'
     || typeof value.branch.timezone !== 'string'
     || !(value.shiftId === null || typeof value.shiftId === 'string')
-    || (value.tenderType !== 'unpaid' && value.tenderType !== 'cash')
-    || (value.paymentState !== 'unpaid' && value.paymentState !== 'paid')
+    || (value.tenderType !== 'unpaid' && value.tenderType !== 'cash' && value.tenderType !== 'external')
+    || !(['unpaid', 'pending', 'paid', 'partially_refunded', 'refunded'] as const).includes(value.paymentState as PaymentState)
     || !isNullableTimestamp(value.paidAt)
     || (value.fulfillmentType !== 'asap' && value.fulfillmentType !== 'scheduled')
     || !isNullableTimestamp(value.requestedPickupAt)
@@ -617,25 +627,39 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
     return invalidResponse('Customer order unexpectedly contains POS operational authority.');
   }
 
+  let payment: PaymentSnapshot;
+  try {
+    payment = parsePaymentSnapshot(value.payment, value.totalSen, value.currency);
+  } catch {
+    return invalidResponse('Order payment projection is invalid.');
+  }
+  if (payment.tenderType !== value.tenderType
+    || payment.paymentState !== value.paymentState
+    || payment.paidAt !== value.paidAt
+    || payment.refundedSen !== value.refundedSen) {
+    return invalidResponse('Order payment summary does not match the trusted payment projection.');
+  }
+
   if (value.tenderType === 'cash') {
     if (value.source !== 'pos'
-      || value.paymentState !== 'paid'
+      || !(['paid', 'partially_refunded', 'refunded'] as const).includes(value.paymentState as PaymentState)
       || !isIsoTimestamp(value.paidAt)) {
       return invalidResponse('Cash payment authority is invalid.');
     }
-  } else if (value.paymentState !== 'unpaid' || value.paidAt !== null) {
+  } else if (value.tenderType === 'external') {
+    if (value.paymentState === 'unpaid'
+      || (value.paymentState === 'pending' ? value.paidAt !== null : !isIsoTimestamp(value.paidAt))) {
+      return invalidResponse('External payment authority is invalid.');
+    }
+  } else if (value.paymentState !== 'unpaid' || value.paidAt !== null || value.refundedSen !== 0) {
     return invalidResponse('Unpaid order authority is invalid.');
   }
 
-  if (value.source === 'customer' && (
-    value.tenderType !== 'unpaid'
-    || value.paymentState !== 'unpaid'
-    || value.paidAt !== null
-  )) {
-    return invalidResponse('Customer order unexpectedly contains POS payment authority.');
+  if (value.source === 'customer' && value.tenderType === 'cash') {
+    return invalidResponse('Customer order unexpectedly contains POS cash authority.');
   }
 
-  return { ...value, voucher, promotions } as OrderSnapshot;
+  return { ...value, payment, voucher, promotions } as OrderSnapshot;
 }
 
 export function cartToOrderItems(lines: CartLine[]): OrderSelectionLine[] {
