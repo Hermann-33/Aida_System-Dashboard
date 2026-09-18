@@ -47,11 +47,42 @@ const baseOrderSnapshot = {
   serverNow: '2026-08-20T12:00:00Z', scheduleState: null, status: 'confirmed' as const,
   statusVersion: 1, currency: 'MYR' as const, pricingVersion: 2,
   subtotalSen: 1450, voucherDiscountSen: 0, promotionDiscountSen: 0,
-  discountSen: 0, totalSen: 1450, voucher: null, promotions: [],
+  discountSen: 0, totalSen: 1450, refundedSen: 0,
+  payment: {
+    tenderType: 'unpaid' as const, paymentState: 'unpaid' as const, paidAt: null,
+    refundedSen: 0, refundableSen: 1450, providerAvailable: false, latestIntent: null, refunds: [],
+  },
+  voucher: null, promotions: [],
   createdAt: '2026-08-20T12:00:00Z', updatedAt: '2026-08-20T12:00:00Z',
   statusUpdatedAt: '2026-08-20T12:00:00Z', preparingAt: null, readyAt: null,
   completedAt: null, cancelledAt: null, lines: [validSnapshotLine],
 };
+
+function unpaidPayment(totalSen: number) {
+  return {
+    tenderType: 'unpaid' as const,
+    paymentState: 'unpaid' as const,
+    paidAt: null,
+    refundedSen: 0,
+    refundableSen: totalSen,
+    providerAvailable: false,
+    latestIntent: null,
+    refunds: [],
+  };
+}
+
+function cashPayment(totalSen: number, paidAt = '2026-08-20T12:00:00Z') {
+  return {
+    tenderType: 'cash' as const,
+    paymentState: 'paid' as const,
+    paidAt,
+    refundedSen: 0,
+    refundableSen: totalSen,
+    providerAvailable: false,
+    latestIntent: null,
+    refunds: [],
+  };
+}
 
 const validQuote = {
   pricingVersion: 2,
@@ -150,7 +181,7 @@ describe('order client trust boundary', () => {
       code: 'AIDA-V-TEST', rewardCode: 'POINTS_RM5', rewardName: 'RM5 Voucher',
       rewardType: 'fixed_amount' as const, discountSen: 500, appliedAt: '2026-08-20T12:00:00Z',
     };
-    expect(parseOrderSnapshot({ ...baseOrderSnapshot, voucherDiscountSen: 500, promotionDiscountSen: 100, discountSen: 600, totalSen: 850, voucher, promotions: [appliedPromotion] }))
+    expect(parseOrderSnapshot({ ...baseOrderSnapshot, voucherDiscountSen: 500, promotionDiscountSen: 100, discountSen: 600, totalSen: 850, payment: unpaidPayment(850), voucher, promotions: [appliedPromotion] }))
       .toMatchObject({ discountSen: 600, voucher: { rewardCode: 'POINTS_RM5' }, promotions: [{ code: 'P7_RM1' }] });
     expect(() => parseOrderSnapshot({ ...baseOrderSnapshot, promotionDiscountSen: 100, discountSen: 100, totalSen: 1350, promotions: [{ ...appliedPromotion, appliedAt: 'bad' }] }))
       .toThrow(/promotion commercial snapshot/i);
@@ -195,7 +226,7 @@ describe('order client trust boundary', () => {
   });
 
   it('accepts server-owned cash payment authority and rejects cash claims without a shift', async () => {
-    const cashOrder = { ...baseOrderSnapshot, source: 'pos' as const, customerUserId: null, memberId: null, salesPointId: 'sales-main', salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' }, terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' }, shiftId: 'shift-main', tenderType: 'cash' as const, paymentState: 'paid' as const, paidAt: '2026-08-20T12:00:00Z' };
+    const cashOrder = { ...baseOrderSnapshot, source: 'pos' as const, customerUserId: null, memberId: null, salesPointId: 'sales-main', salesPoint: { id: 'sales-main', code: 'SP-MAIN', name: 'Main Counter' }, terminalId: 'terminal-main', terminal: { id: 'terminal-main', code: 'POS-MAIN-01' }, shiftId: 'shift-main', tenderType: 'cash' as const, paymentState: 'paid' as const, paidAt: '2026-08-20T12:00:00Z', payment: cashPayment(1450) };
     vi.mocked(employeeFetch)
       .mockResolvedValueOnce(new Response(JSON.stringify([cashOrder])))
       .mockResolvedValueOnce(new Response(JSON.stringify([{ ...cashOrder, shiftId: null }])));
@@ -226,6 +257,45 @@ describe('order client trust boundary', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify([{ ...baseOrderSnapshot, lines: [{ ...validSnapshotLine, lineTotalSen: 1400 }] }])));
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
+  });
+
+  it('accepts trusted customer external pending payment authority', () => {
+    const snapshot = parseOrderSnapshot({
+      ...baseOrderSnapshot,
+      tenderType: 'external',
+      paymentState: 'pending',
+      payment: {
+        tenderType: 'external',
+        paymentState: 'pending',
+        paidAt: null,
+        refundedSen: 0,
+        refundableSen: 1450,
+        providerAvailable: true,
+        latestIntent: {
+          id: 'intent-1',
+          providerKey: 'test_provider',
+          state: 'authorized',
+          settlementState: 'not_reported',
+          amountSen: 1450,
+          currency: 'MYR',
+          createdAt: '2026-08-20T12:01:00Z',
+          authorizedAt: '2026-08-20T12:01:30Z',
+          capturedAt: null,
+          settledAt: null,
+        },
+        refunds: [],
+      },
+    });
+    expect(snapshot.tenderType).toBe('external');
+    expect(snapshot.paymentState).toBe('pending');
+    expect(snapshot.payment.latestIntent?.state).toBe('authorized');
+  });
+
+  it('rejects an order summary that disagrees with its payment projection', () => {
+    expect(() => parseOrderSnapshot({
+      ...baseOrderSnapshot,
+      refundedSen: 100,
+    })).toThrow(/payment/i);
   });
 
   it('rejects a branch snapshot that disagrees with branchId', async () => {

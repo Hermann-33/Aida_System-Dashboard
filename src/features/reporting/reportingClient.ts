@@ -16,6 +16,10 @@ export type ReportingSummary = {
     inventoryQuantitiesGroupedByBaseUnitItem: boolean;
     statutoryAccountingIncluded: boolean;
     processorSettlementIncluded: boolean;
+    refundDataAvailable: boolean;
+    paymentFactsIncludeCancelledOrders: boolean;
+    acceptedOrderValueIsSettlement: boolean;
+    providerSettlementStateAvailable: boolean;
   };
   filter: JsonRecord;
   orders: {
@@ -88,6 +92,25 @@ export type ReportingSummary = {
     movementCount: number;
     byItem: unknown[];
   };
+  payments: {
+    capturedOrderCount: number;
+    grossCapturedSen: number;
+    cashCapturedSen: number;
+    externalCapturedSen: number;
+    pendingExternalSen: number;
+    succeededRefundSen: number;
+    cashRefundedSen: number;
+    externalRefundedSen: number;
+    netCapturedAfterRefundSen: number;
+    refundReconciled: boolean;
+    paymentStateCounts: Record<string, number>;
+    externalSettlement: {
+      settledSen: number;
+      pendingSen: number;
+      failedSen: number;
+      notReportedSen: number;
+    };
+  };
 };
 
 export type TransactionItem = {
@@ -108,6 +131,13 @@ export type TransactionItem = {
   promotionDiscountSen: number;
   discountSen: number;
   totalSen: number;
+  currency: string;
+  refundedSen: number;
+  refundableSen: number;
+  refundReservedSen: number;
+  refundReconciled: boolean;
+  latestPaymentIntent: JsonRecord | null;
+  refunds: JsonRecord[];
   discountReconciled: boolean;
   tenderType: string;
   paymentState: string;
@@ -125,6 +155,9 @@ export type TransactionReport = {
     totalSen: string;
     refundDataAvailable: boolean;
     processorSettlementIncluded: boolean;
+    providerLifecycleAvailable: boolean;
+    acceptedOrderValueUnchangedByRefunds: boolean;
+    providerSettlementStateAvailable: boolean;
   };
   filter: JsonRecord;
   totalCount: number;
@@ -155,6 +188,17 @@ export type AuditReport = {
   coverage: {
     sourceBackedOnly: boolean;
     completeGeneralAuditLog: boolean;
+    notes: string[];
+  };
+};
+
+export type PaymentAuditReport = {
+  filter: JsonRecord;
+  totalCount: number;
+  items: AuditItem[];
+  coverage: {
+    sourceBackedOnly: boolean;
+    rawProviderPayloadIncluded: boolean;
     notes: string[];
   };
 };
@@ -212,6 +256,8 @@ function parseSummary(value: unknown): ReportingSummary {
   const cash = record(row.cashMovements, 'reporting cash movements');
   const loyalty = record(row.loyaltyAndDiscountApplications, 'reporting loyalty');
   const inventory = record(row.inventoryMovements, 'reporting inventory movements');
+  const payments = record(row.payments, 'reporting payments');
+  const settlement = record(payments.externalSettlement, 'reporting external settlement');
 
   return {
     semantics: {
@@ -220,6 +266,10 @@ function parseSummary(value: unknown): ReportingSummary {
       inventoryQuantitiesGroupedByBaseUnitItem: bool(semantics.inventoryQuantitiesGroupedByBaseUnitItem, 'reporting inventory semantics'),
       statutoryAccountingIncluded: bool(semantics.statutoryAccountingIncluded, 'reporting statutory-accounting semantics'),
       processorSettlementIncluded: bool(semantics.processorSettlementIncluded, 'reporting processor-settlement semantics'),
+      refundDataAvailable: bool(semantics.refundDataAvailable, 'reporting refund semantics'),
+      paymentFactsIncludeCancelledOrders: bool(semantics.paymentFactsIncludeCancelledOrders, 'reporting payment cancellation semantics'),
+      acceptedOrderValueIsSettlement: bool(semantics.acceptedOrderValueIsSettlement, 'reporting accepted-value settlement semantics'),
+      providerSettlementStateAvailable: bool(semantics.providerSettlementStateAvailable, 'reporting settlement-state semantics'),
     },
     filter: record(row.filter, 'reporting summary filter'),
     orders: {
@@ -301,6 +351,25 @@ function parseSummary(value: unknown): ReportingSummary {
       movementCount: nonNegativeInteger(inventory.movementCount, 'reporting inventory movementCount'),
       byItem: array(inventory.byItem, 'reporting inventory byItem'),
     },
+    payments: {
+      capturedOrderCount: nonNegativeInteger(payments.capturedOrderCount, 'reporting capturedOrderCount'),
+      grossCapturedSen: nonNegativeInteger(payments.grossCapturedSen, 'reporting grossCapturedSen'),
+      cashCapturedSen: nonNegativeInteger(payments.cashCapturedSen, 'reporting cashCapturedSen'),
+      externalCapturedSen: nonNegativeInteger(payments.externalCapturedSen, 'reporting externalCapturedSen'),
+      pendingExternalSen: nonNegativeInteger(payments.pendingExternalSen, 'reporting pendingExternalSen'),
+      succeededRefundSen: nonNegativeInteger(payments.succeededRefundSen, 'reporting succeededRefundSen'),
+      cashRefundedSen: nonNegativeInteger(payments.cashRefundedSen, 'reporting cashRefundedSen'),
+      externalRefundedSen: nonNegativeInteger(payments.externalRefundedSen, 'reporting externalRefundedSen'),
+      netCapturedAfterRefundSen: nonNegativeInteger(payments.netCapturedAfterRefundSen, 'reporting netCapturedAfterRefundSen'),
+      refundReconciled: bool(payments.refundReconciled, 'reporting refundReconciled'),
+      paymentStateCounts: statusCounts(payments.paymentStateCounts),
+      externalSettlement: {
+        settledSen: nonNegativeInteger(settlement.settledSen, 'reporting settledSen'),
+        pendingSen: nonNegativeInteger(settlement.pendingSen, 'reporting pending settlementSen'),
+        failedSen: nonNegativeInteger(settlement.failedSen, 'reporting failed settlementSen'),
+        notReportedSen: nonNegativeInteger(settlement.notReportedSen, 'reporting notReported settlementSen'),
+      },
+    },
   };
 }
 
@@ -335,6 +404,13 @@ function parseTransactionItem(value: unknown, index: number): TransactionItem {
     promotionDiscountSen: nonNegativeInteger(item.promotionDiscountSen, 'transaction promotionDiscountSen'),
     discountSen: nonNegativeInteger(item.discountSen, 'transaction discountSen'),
     totalSen: nonNegativeInteger(item.totalSen, 'transaction totalSen'),
+    currency: text(item.currency, 'transaction currency'),
+    refundedSen: nonNegativeInteger(item.refundedSen, 'transaction refundedSen'),
+    refundableSen: nonNegativeInteger(item.refundableSen, 'transaction refundableSen'),
+    refundReservedSen: nonNegativeInteger(item.refundReservedSen, 'transaction refundReservedSen'),
+    refundReconciled: bool(item.refundReconciled, 'transaction refundReconciled'),
+    latestPaymentIntent: item.latestPaymentIntent === null ? null : record(item.latestPaymentIntent, 'transaction latestPaymentIntent'),
+    refunds: array(item.refunds, 'transaction refunds').map((value, refundIndex) => record(value, `transaction refunds[${refundIndex}]`)),
     discountReconciled: bool(item.discountReconciled, 'transaction discountReconciled'),
     tenderType: text(item.tenderType, 'transaction tenderType'),
     paymentState: text(item.paymentState, 'transaction paymentState'),
@@ -356,10 +432,33 @@ function parseTransactionReport(value: unknown): TransactionReport {
       totalSen: text(semantics.totalSen, 'transaction total semantics'),
       refundDataAvailable: bool(semantics.refundDataAvailable, 'transaction refund semantics'),
       processorSettlementIncluded: bool(semantics.processorSettlementIncluded, 'transaction settlement semantics'),
+      providerLifecycleAvailable: bool(semantics.providerLifecycleAvailable, 'transaction provider lifecycle semantics'),
+      acceptedOrderValueUnchangedByRefunds: bool(semantics.acceptedOrderValueUnchangedByRefunds, 'transaction accepted-value semantics'),
+      providerSettlementStateAvailable: bool(semantics.providerSettlementStateAvailable, 'transaction provider settlement semantics'),
     },
     filter: record(row.filter, 'transaction report filter'),
     totalCount: nonNegativeInteger(row.totalCount, 'transaction report totalCount'),
     items: array(row.items, 'transaction report items').map(parseTransactionItem),
+  };
+}
+
+function parseAuditItem(value: unknown, index: number, label = 'audit report'): AuditItem {
+  const item = record(value, `${label} items[${index}]`);
+  return {
+    eventKey: text(item.eventKey, 'audit eventKey'),
+    occurredAt: text(item.occurredAt, 'audit occurredAt'),
+    localDate: text(item.localDate, 'audit localDate'),
+    localTime: text(item.localTime, 'audit localTime'),
+    timezone: text(item.timezone, 'audit timezone'),
+    category: text(item.category, 'audit category'),
+    action: text(item.action, 'audit action'),
+    actorUserId: nullableText(item.actorUserId, 'audit actorUserId'),
+    branchId: nullableText(item.branchId, 'audit branchId'),
+    salesPointId: nullableText(item.salesPointId, 'audit salesPointId'),
+    entityType: text(item.entityType, 'audit entityType'),
+    entityId: text(item.entityId, 'audit entityId'),
+    entityLabel: text(item.entityLabel, 'audit entityLabel'),
+    details: record(item.details, 'audit details'),
   };
 }
 
@@ -369,29 +468,26 @@ function parseAuditReport(value: unknown): AuditReport {
   return {
     filter: record(row.filter, 'audit report filter'),
     totalCount: nonNegativeInteger(row.totalCount, 'audit report totalCount'),
-    items: array(row.items, 'audit report items').map((value, index) => {
-      const item = record(value, `audit report items[${index}]`);
-      return {
-        eventKey: text(item.eventKey, 'audit eventKey'),
-        occurredAt: text(item.occurredAt, 'audit occurredAt'),
-        localDate: text(item.localDate, 'audit localDate'),
-        localTime: text(item.localTime, 'audit localTime'),
-        timezone: text(item.timezone, 'audit timezone'),
-        category: text(item.category, 'audit category'),
-        action: text(item.action, 'audit action'),
-        actorUserId: nullableText(item.actorUserId, 'audit actorUserId'),
-        branchId: nullableText(item.branchId, 'audit branchId'),
-        salesPointId: nullableText(item.salesPointId, 'audit salesPointId'),
-        entityType: text(item.entityType, 'audit entityType'),
-        entityId: text(item.entityId, 'audit entityId'),
-        entityLabel: text(item.entityLabel, 'audit entityLabel'),
-        details: record(item.details, 'audit details'),
-      };
-    }),
+    items: array(row.items, 'audit report items').map((value, index) => parseAuditItem(value, index)),
     coverage: {
       sourceBackedOnly: bool(coverage.sourceBackedOnly, 'audit sourceBackedOnly'),
       completeGeneralAuditLog: bool(coverage.completeGeneralAuditLog, 'audit completeGeneralAuditLog'),
       notes: stringArray(coverage.notes, 'audit coverage notes'),
+    },
+  };
+}
+
+function parsePaymentAuditReport(value: unknown): PaymentAuditReport {
+  const row = record(value, 'payment audit report');
+  const coverage = record(row.coverage, 'payment audit coverage');
+  return {
+    filter: record(row.filter, 'payment audit filter'),
+    totalCount: nonNegativeInteger(row.totalCount, 'payment audit totalCount'),
+    items: array(row.items, 'payment audit items').map((value, index) => parseAuditItem(value, index, 'payment audit')),
+    coverage: {
+      sourceBackedOnly: bool(coverage.sourceBackedOnly, 'payment audit sourceBackedOnly'),
+      rawProviderPayloadIncluded: bool(coverage.rawProviderPayloadIncluded, 'payment audit rawProviderPayloadIncluded'),
+      notes: stringArray(coverage.notes, 'payment audit coverage notes'),
     },
   };
 }
@@ -423,4 +519,9 @@ export function loadTransactionReport(filter: ReportFilter): Promise<Transaction
 
 export function loadAuditReport(filter: ReportFilter): Promise<AuditReport> {
   return request('/api/v1/admin/reporting/audit', filter, parseAuditReport);
+}
+
+
+export function loadPaymentAuditReport(filter: ReportFilter): Promise<PaymentAuditReport> {
+  return request('/api/v1/admin/reporting/payment-audit', filter, parsePaymentAuditReport);
 }
