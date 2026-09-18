@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { PREVIEW_TRANSACTIONS } from '../../preview/fixtures/catalog';
 import { isUiPreviewMode } from '../../preview/uiPreviewMode';
 import {
@@ -6,6 +6,12 @@ import {
   type TransactionItem,
   type TransactionReport,
 } from '../reporting/reportingClient';
+import {
+  loadAdminPaymentState,
+  requestAdminRefund,
+  requestableRefundSen,
+  type PaymentSnapshot,
+} from '../payments/paymentClient';
 import { formatRmFromSen } from '../../shared/formatting/money';
 import { AdminPageShell } from './AdminPageShell';
 import './admin.css';
@@ -43,10 +49,12 @@ function shortUserId(value: string): string {
 
 function liveRow(item: TransactionItem): DisplayTransaction {
   const payment = item.paymentState === 'unpaid'
-    ? 'Unpaid / not settled'
+    ? 'Unpaid'
     : item.tenderType === 'cash'
-      ? 'Cash'
-      : item.tenderType;
+      ? `Cash · ${item.paymentState.replaceAll('_', ' ')}`
+      : item.tenderType === 'external'
+        ? `External · ${item.paymentState.replaceAll('_', ' ')}`
+        : item.tenderType;
   return {
     key: item.orderId,
     orderLabel: `#${item.orderNumber}`,
@@ -67,6 +75,18 @@ function liveRow(item: TransactionItem): DisplayTransaction {
   };
 }
 
+function parseRmToSen(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(trimmed)) return null;
+  const [whole, fraction = ''] = trimmed.split('.');
+  const sen = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  return Number.isSafeInteger(sen) && sen > 0 ? sen : null;
+}
+
+function stateLabel(value: string): string {
+  return value.replaceAll('_', ' ');
+}
+
 export function AdminTransactionsPage() {
   const preview = isUiPreviewMode();
   const today = useMemo(localDateToday, []);
@@ -77,6 +97,13 @@ export function AdminTransactionsPage() {
   const [loading, setLoading] = useState(!preview);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<DisplayTransaction | null>(null);
+  const [payment, setPayment] = useState<PaymentSnapshot | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+  const [refundSubmitting, setRefundSubmitting] = useState(false);
+  const [refundStatus, setRefundStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (preview) return;
@@ -89,6 +116,28 @@ export function AdminTransactionsPage() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [preview, from, to, page]);
+
+  useEffect(() => {
+    setPayment(null);
+    setPaymentError(null);
+    setRefundAmount('');
+    setRefundReason('');
+    setRefundStatus(null);
+    if (preview || !selected) {
+      setPaymentLoading(false);
+      return;
+    }
+
+    let active = true;
+    setPaymentLoading(true);
+    loadAdminPaymentState(selected.key, selected.totalSen, 'MYR')
+      .then((data) => { if (active) setPayment(data); })
+      .catch((cause: unknown) => {
+        if (active) setPaymentError(cause instanceof Error ? cause.message : 'Payment state failed');
+      })
+      .finally(() => { if (active) setPaymentLoading(false); });
+    return () => { active = false; };
+  }, [preview, selected]);
 
   const rows = useMemo<DisplayTransaction[]>(() => {
     if (preview) {
@@ -117,11 +166,54 @@ export function AdminTransactionsPage() {
   const totalCount = preview ? rows.length : report?.totalCount ?? 0;
   const start = totalCount === 0 ? 0 : page * PAGE_SIZE + 1;
   const end = preview ? rows.length : Math.min((page + 1) * PAGE_SIZE, totalCount);
+  const requestableSen = selected && payment ? requestableRefundSen(payment, selected.totalSen) : 0;
+  const canRefund = !!payment
+    && (payment.tenderType === 'cash' || payment.tenderType === 'external')
+    && (payment.paymentState === 'paid' || payment.paymentState === 'partially_refunded')
+    && requestableSen > 0;
 
   function updateRange(setter: (value: string) => void, value: string) {
     setter(value);
     setPage(0);
     setSelected(null);
+  }
+
+  async function submitRefund(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected || !payment || !canRefund) return;
+    const amountSen = parseRmToSen(refundAmount);
+    if (amountSen === null || amountSen > requestableSen) {
+      setPaymentError(`Enter a refund amount from RM0.01 to ${formatRmFromSen(requestableSen)}.`);
+      return;
+    }
+    const reason = refundReason.trim();
+    if (!reason) {
+      setPaymentError('Refund reason is required.');
+      return;
+    }
+
+    setRefundSubmitting(true);
+    setPaymentError(null);
+    setRefundStatus(null);
+    try {
+      const next = await requestAdminRefund({
+        orderId: selected.key,
+        tenderType: payment.tenderType,
+        amountSen,
+        reason,
+        idempotencyKey: crypto.randomUUID(),
+      }, selected.totalSen, 'MYR');
+      setPayment(next);
+      setRefundAmount('');
+      setRefundReason('');
+      setRefundStatus(payment.tenderType === 'cash'
+        ? 'Cash refund succeeded and the trusted shift cash-out was recorded.'
+        : 'External refund requested. Refunded value changes only after provider success evidence.');
+    } catch (cause) {
+      setPaymentError(cause instanceof Error ? cause.message : 'Refund request failed');
+    } finally {
+      setRefundSubmitting(false);
+    }
   }
 
   return (
@@ -130,7 +222,7 @@ export function AdminTransactionsPage() {
       title="Transaction report"
       hint={preview
         ? 'UI preview sample transactions — not production authority.'
-        : 'Source-backed order detail. Total is accepted order value, not processor settlement.'}
+        : 'Accepted order value is source-backed. Open a transaction for current payment/refund authority; processor settlement remains distinct.'}
     >
       <div className="admin-filters">
         <label>
@@ -145,7 +237,7 @@ export function AdminTransactionsPage() {
 
       {!preview && report && (
         <p className="form-hint">
-          Refund data and processor settlement are intentionally unavailable until Phase 9.
+          Report totals remain accepted commercial value. Current refunds are loaded separately from the protected payment authority when detail is opened.
         </p>
       )}
       {loading && <p className="form-hint">Loading authoritative transactions…</p>}
@@ -211,15 +303,101 @@ export function AdminTransactionsPage() {
               <dt>Source</dt><dd>{selected.source}</dd>
               <dt>Actor</dt><dd>{selected.staff}</dd>
               <dt>Member</dt><dd>{selected.member}</dd>
-              <dt>Payment state</dt><dd>{selected.paymentState}</dd>
+              <dt>Reported payment state</dt><dd>{selected.paymentState}</dd>
               <dt>Subtotal</dt><dd>{formatRmFromSen(selected.subtotalSen)}</dd>
               <dt>Voucher discount</dt><dd>{formatRmFromSen(selected.voucherDiscountSen)}</dd>
               <dt>Promotion discount</dt><dd>{formatRmFromSen(selected.promotionDiscountSen)}</dd>
               <dt>Total discount</dt><dd>{formatRmFromSen(selected.discountSen)}</dd>
               <dt>Accepted order value</dt><dd>{formatRmFromSen(selected.totalSen)}</dd>
-              <dt>Refund</dt><dd>{selected.refundSen === null ? 'Unavailable until Phase 9' : formatRmFromSen(selected.refundSen)}</dd>
+              {preview && <><dt>Preview refund</dt><dd>{selected.refundSen === null ? 'None' : formatRmFromSen(selected.refundSen)}</dd></>}
               <dt>Status</dt><dd>{selected.status}</dd>
             </dl>
+
+            {!preview && (
+              <section aria-label="Payment and refund authority">
+                <h3 className="admin-section-title">Payment & refund authority</h3>
+                {paymentLoading && <p className="form-hint">Loading protected payment state…</p>}
+                {paymentError && <div className="form-error" role="alert">{paymentError}</div>}
+                {refundStatus && <p className="form-hint" role="status">{refundStatus}</p>}
+                {payment && (
+                  <>
+                    <dl className="admin-dl">
+                      <dt>Tender</dt><dd>{stateLabel(payment.tenderType)}</dd>
+                      <dt>Payment state</dt><dd>{stateLabel(payment.paymentState)}</dd>
+                      <dt>Paid at</dt><dd>{payment.paidAt ? new Date(payment.paidAt).toLocaleString('en-MY') : 'Not captured/paid'}</dd>
+                      <dt>Refunded</dt><dd>{formatRmFromSen(payment.refundedSen)}</dd>
+                      <dt>Requestable balance</dt><dd>{formatRmFromSen(requestableSen)}</dd>
+                      <dt>Provider available</dt><dd>{payment.providerAvailable ? 'Configured' : 'Not configured'}</dd>
+                      {payment.latestIntent && (
+                        <>
+                          <dt>Latest provider state</dt><dd>{stateLabel(payment.latestIntent.state)}</dd>
+                          <dt>Settlement state</dt><dd>{stateLabel(payment.latestIntent.settlementState)}</dd>
+                        </>
+                      )}
+                    </dl>
+
+                    {payment.refunds.length > 0 && (
+                      <div>
+                        <p className="form-hint">Refund history</p>
+                        <ul>
+                          {payment.refunds.map((refund) => (
+                            <li key={refund.id}>
+                              {formatRmFromSen(refund.amountSen)} · {stateLabel(refund.state)}
+                              {refund.reason ? ` · ${refund.reason}` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {canRefund ? (
+                      <form onSubmit={submitRefund}>
+                        <label>
+                          Refund amount (RM)
+                          <input
+                            aria-label="Refund amount (RM)"
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            value={refundAmount}
+                            onChange={(event) => setRefundAmount(event.target.value)}
+                            disabled={refundSubmitting}
+                          />
+                        </label>
+                        <label>
+                          Refund reason
+                          <input
+                            aria-label="Refund reason"
+                            maxLength={300}
+                            value={refundReason}
+                            onChange={(event) => setRefundReason(event.target.value)}
+                            disabled={refundSubmitting}
+                          />
+                        </label>
+                        <p className="form-hint">
+                          {payment.tenderType === 'cash'
+                            ? 'Cash refunds require this Admin session, the enrolled terminal and its open shift. The server records the matching cash-out.'
+                            : 'External refunds are requests only until provider evidence marks them succeeded.'}
+                        </p>
+                        <button type="submit" className="btn-primary" disabled={refundSubmitting}>
+                          {refundSubmitting ? 'Submitting refund…' : `Refund up to ${formatRmFromSen(requestableSen)}`}
+                        </button>
+                      </form>
+                    ) : (
+                      <p className="form-hint">
+                        {payment.paymentState === 'refunded'
+                          ? 'This order is fully refunded.'
+                          : payment.paymentState === 'pending'
+                            ? 'Refunds are unavailable until payment capture succeeds.'
+                            : requestableSen === 0
+                              ? 'The full refundable balance is already reserved or refunded.'
+                              : 'This payment state is not refundable.'}
+                      </p>
+                    )}
+                  </>
+                )}
+              </section>
+            )}
+
             <div className="admin-drawer__actions">
               <button type="button" className="btn-primary" onClick={() => setSelected(null)}>Close</button>
             </div>
