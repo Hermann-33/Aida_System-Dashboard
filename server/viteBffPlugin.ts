@@ -72,6 +72,10 @@ import {
   handleAdminTransactionReport,
 } from './reportingBff.js';
 import { handlePosMemberLoyalty } from './posLoyaltyBff.js';
+import {
+  handleAdminPaymentState,
+  handleAdminRefund,
+} from './paymentBff.js';
 
 type Handler = (
   request: Request,
@@ -131,6 +135,8 @@ const handlers = new Map<string, Handler>([
   ['/api/v1/admin/reporting/summary', handleAdminReportingSummary],
   ['/api/v1/admin/reporting/transactions', handleAdminTransactionReport],
   ['/api/v1/admin/reporting/audit', handleAdminAuditEvents],
+  ['/api/v1/admin/payments/state', handleAdminPaymentState],
+  ['/api/v1/admin/payments/refund', handleAdminRefund],
   ['/api/v1/pos/member-loyalty', handlePosMemberLoyalty],
 ]);
 
@@ -204,7 +210,7 @@ function mount(server: ConnectServer, env: Record<string, string | undefined>) {
 
 /**
  * Serves employee/admin, catalogue, ordering, terminal, shift, pickup, loyalty,
- * promotion and reporting BFF handlers during Vite dev/preview. Production
+ * promotion, reporting and payment/refund BFF handlers during Vite dev/preview. Production
  * serverless deployments use the same root `/api` handlers.
  */
 export function aidaBffPlugin(env: Record<string, string | undefined>): Plugin {
