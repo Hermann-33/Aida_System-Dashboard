@@ -482,8 +482,6 @@ export function parseOrderQuote(value: unknown): OrderQuote {
     || !isNonNegativeInteger(value.promotionDiscountSen)
     || !isNonNegativeInteger(value.discountSen)
     || !isNonNegativeInteger(value.totalSen)
-    || !isNonNegativeInteger(value.refundedSen)
-    || !isRecord(value.payment)
     || !Array.isArray(value.promotions)
     || (value.fulfillmentType !== 'asap' && value.fulfillmentType !== 'scheduled')
     || !isNullableTimestamp(value.requestedPickupAt)
