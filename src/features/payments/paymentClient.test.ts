@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  loadAdminPaymentProviders,
   loadAdminPaymentState,
+  parsePaymentProviderAdminState,
   parsePaymentSnapshot,
   requestAdminRefund,
   requestableRefundSen,
@@ -70,6 +72,29 @@ describe('Phase 9 payment client', () => {
       ...paid,
       latestIntent: { ...captured, state: 'authorized', capturedAt: null },
     }, 1000, 'MYR')).toThrow(/captured intent/i);
+  });
+
+  it('parses and loads only non-secret provider capability metadata', async () => {
+    const provider = {
+      providerKey: 'test_provider',
+      displayName: 'Test Provider',
+      environment: 'test',
+      isActive: false,
+      customerEnabled: false,
+      posEnabled: false,
+      supportsRefunds: true,
+      createdAt: '2026-09-18T01:00:00Z',
+      updatedAt: '2026-09-18T01:00:00Z',
+    };
+    expect(parsePaymentProviderAdminState(provider)).toEqual(provider);
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: [provider] }), { status: 200 }),
+    );
+    await expect(loadAdminPaymentProviders()).resolves.toEqual([provider]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/admin/payments/providers',
+      expect.objectContaining({ credentials: 'include', cache: 'no-store' }),
+    );
   });
 
   it('loads payment state from the same-origin Admin BFF', async () => {
