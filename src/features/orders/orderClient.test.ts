@@ -47,7 +47,12 @@ const baseOrderSnapshot = {
   serverNow: '2026-08-20T12:00:00Z', scheduleState: null, status: 'confirmed' as const,
   statusVersion: 1, currency: 'MYR' as const, pricingVersion: 2,
   subtotalSen: 1450, voucherDiscountSen: 0, promotionDiscountSen: 0,
-  discountSen: 0, totalSen: 1450, voucher: null, promotions: [],
+  discountSen: 0, totalSen: 1450, refundedSen: 0,
+  payment: {
+    tenderType: 'unpaid' as const, paymentState: 'unpaid' as const, paidAt: null,
+    refundedSen: 0, refundableSen: 1450, providerAvailable: false, latestIntent: null, refunds: [],
+  },
+  voucher: null, promotions: [],
   createdAt: '2026-08-20T12:00:00Z', updatedAt: '2026-08-20T12:00:00Z',
   statusUpdatedAt: '2026-08-20T12:00:00Z', preparingAt: null, readyAt: null,
   completedAt: null, cancelledAt: null, lines: [validSnapshotLine],
@@ -226,6 +231,45 @@ describe('order client trust boundary', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify([{ ...baseOrderSnapshot, lines: [{ ...validSnapshotLine, lineTotalSen: 1400 }] }])));
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
     await expect(fetchOrders()).rejects.toMatchObject({ code: 'ORDER_RESPONSE_INVALID' });
+  });
+
+  it('accepts trusted customer external pending payment authority', () => {
+    const snapshot = parseOrderSnapshot({
+      ...baseOrderSnapshot,
+      tenderType: 'external',
+      paymentState: 'pending',
+      payment: {
+        tenderType: 'external',
+        paymentState: 'pending',
+        paidAt: null,
+        refundedSen: 0,
+        refundableSen: 1450,
+        providerAvailable: true,
+        latestIntent: {
+          id: 'intent-1',
+          providerKey: 'test_provider',
+          state: 'authorized',
+          settlementState: 'not_reported',
+          amountSen: 1450,
+          currency: 'MYR',
+          createdAt: '2026-08-20T12:01:00Z',
+          authorizedAt: '2026-08-20T12:01:30Z',
+          capturedAt: null,
+          settledAt: null,
+        },
+        refunds: [],
+      },
+    });
+    expect(snapshot.tenderType).toBe('external');
+    expect(snapshot.paymentState).toBe('pending');
+    expect(snapshot.payment.latestIntent?.state).toBe('authorized');
+  });
+
+  it('rejects an order summary that disagrees with its payment projection', () => {
+    expect(() => parseOrderSnapshot({
+      ...baseOrderSnapshot,
+      refundedSen: 100,
+    })).toThrow(/payment/i);
   });
 
   it('rejects a branch snapshot that disagrees with branchId', async () => {
