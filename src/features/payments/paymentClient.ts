@@ -5,6 +5,18 @@ export type PaymentSettlementState = 'not_reported' | 'pending' | 'settled' | 'f
 export type RefundTenderType = 'cash' | 'external';
 export type RefundState = 'requested' | 'processing' | 'succeeded' | 'failed' | 'cancelled';
 
+export type PaymentProviderAdminState = {
+  providerKey: string;
+  displayName: string;
+  environment: 'test' | 'live';
+  isActive: boolean;
+  customerEnabled: boolean;
+  posEnabled: boolean;
+  supportsRefunds: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type PaymentIntentSnapshot = {
   id: string;
   providerKey: string;
@@ -230,6 +242,33 @@ export function parsePaymentSnapshot(
     latestIntent,
     refunds,
   };
+}
+
+export function parsePaymentProviderAdminState(value: unknown): PaymentProviderAdminState {
+  const row = record(value, 'payment provider');
+  if (row.environment !== 'test' && row.environment !== 'live') throw new Error('Invalid payment provider environment');
+  return {
+    providerKey: text(row.providerKey, 'payment provider key'),
+    displayName: text(row.displayName, 'payment provider name'),
+    environment: row.environment,
+    isActive: bool(row.isActive, 'payment provider active flag'),
+    customerEnabled: bool(row.customerEnabled, 'payment provider customer flag'),
+    posEnabled: bool(row.posEnabled, 'payment provider POS flag'),
+    supportsRefunds: bool(row.supportsRefunds, 'payment provider refund capability'),
+    createdAt: timestamp(row.createdAt, 'payment provider createdAt'),
+    updatedAt: timestamp(row.updatedAt, 'payment provider updatedAt'),
+  };
+}
+
+export async function loadAdminPaymentProviders(): Promise<PaymentProviderAdminState[]> {
+  const response = await fetch('/api/v1/admin/payments/providers', {
+    credentials: 'include',
+    cache: 'no-store',
+  });
+  const body = await response.json().catch(() => ({})) as { data?: unknown; error?: string };
+  if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
+  if (!Array.isArray(body.data)) throw new Error('Backend response is missing provider data');
+  return body.data.map(parsePaymentProviderAdminState);
 }
 
 export function reservedRefundSen(snapshot: PaymentSnapshot): number {
