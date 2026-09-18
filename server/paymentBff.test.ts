@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { handleAdminPaymentState, handleAdminRefund } from './paymentBff.js';
+import { handleAdminPaymentState, handleAdminProviderState, handleAdminRefund } from './paymentBff.js';
 import type { EmployeeBffDependencies } from './employeeBff.js';
 
 const env = {
@@ -45,6 +45,26 @@ function request(path: string, init: RequestInit = {}) {
 }
 
 describe('payment BFF', () => {
+  it('loads non-secret provider capability state with caller JWT', async () => {
+    const providers = [{
+      providerKey: 'test_provider',
+      displayName: 'Test Provider',
+      environment: 'test',
+      isActive: false,
+      customerEnabled: false,
+      posEnabled: false,
+      supportsRefunds: true,
+      createdAt: '2026-09-18T01:00:00Z',
+      updatedAt: '2026-09-18T01:00:00Z',
+    }];
+    const { deps, calls } = depsWith(jsonResponse(providers));
+    const response = await handleAdminProviderState(request('/api/v1/admin/payments/providers'), deps);
+    expect(response.status).toBe(200);
+    expect(calls[3]?.url).toContain('/rest/v1/rpc/get_payment_provider_admin_state');
+    expect(String(calls[3]?.init?.body)).toBe('{}');
+    expect(await response.text()).not.toContain('service_role');
+  });
+
   it('loads protected payment state with caller JWT and publishable key', async () => {
     const { deps, calls } = depsWith(jsonResponse(payment));
     const response = await handleAdminPaymentState(request('/api/v1/admin/payments/state?orderId=order-1'), deps);
