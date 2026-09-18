@@ -68,12 +68,14 @@ import {
 } from './promotionBff.js';
 import {
   handleAdminAuditEvents,
+  handleAdminPaymentAuditEvents,
   handleAdminReportingSummary,
   handleAdminTransactionReport,
 } from './reportingBff.js';
 import { handlePosMemberLoyalty } from './posLoyaltyBff.js';
 import {
   handleAdminPaymentState,
+  handleAdminProviderState,
   handleAdminRefund,
 } from './paymentBff.js';
 
@@ -135,6 +137,8 @@ const handlers = new Map<string, Handler>([
   ['/api/v1/admin/reporting/summary', handleAdminReportingSummary],
   ['/api/v1/admin/reporting/transactions', handleAdminTransactionReport],
   ['/api/v1/admin/reporting/audit', handleAdminAuditEvents],
+  ['/api/v1/admin/reporting/payment-audit', handleAdminPaymentAuditEvents],
+  ['/api/v1/admin/payments/providers', handleAdminProviderState],
   ['/api/v1/admin/payments/state', handleAdminPaymentState],
   ['/api/v1/admin/payments/refund', handleAdminRefund],
   ['/api/v1/pos/member-loyalty', handlePosMemberLoyalty],
