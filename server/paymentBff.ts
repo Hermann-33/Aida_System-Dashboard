@@ -151,6 +151,29 @@ function validPaymentSnapshot(data: unknown): data is Record<string, unknown> {
   return !!data && typeof data === 'object' && !Array.isArray(data);
 }
 
+export async function handleAdminProviderState(
+  request: Request,
+  deps: EmployeeBffDependencies = {},
+): Promise<Response> {
+  if (request.method !== 'GET') {
+    return json({ error: 'Method not allowed', code: 'METHOD_NOT_ALLOWED' }, 405);
+  }
+  const auth = await requireAdmin(request, deps);
+  if (auth instanceof Response) return auth;
+  const upstream = await rpc(
+    'get_payment_provider_admin_state',
+    {},
+    auth.accessToken,
+    deps,
+  );
+  if (!upstream.ok) return failure(upstream, auth.responseCookies);
+  const data = await upstream.json().catch(() => null);
+  if (!Array.isArray(data)) {
+    return json({ error: 'Provider response is invalid', code: 'PAYMENT_PROVIDER_RESPONSE_INVALID' }, 502, auth.responseCookies);
+  }
+  return json({ data }, 200, auth.responseCookies);
+}
+
 export async function handleAdminPaymentState(
   request: Request,
   deps: EmployeeBffDependencies = {},
