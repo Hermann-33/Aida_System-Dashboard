@@ -180,7 +180,7 @@ export function AdminTransactionsPage() {
 
   async function submitRefund(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selected || !payment || !canRefund) return;
+    if (!selected || !payment || !canRefund || payment.tenderType === 'unpaid') return;
     const amountSen = parseRmToSen(refundAmount);
     if (amountSen === null || amountSen > requestableSen) {
       setPaymentError(`Enter a refund amount from RM0.01 to ${formatRmFromSen(requestableSen)}.`);
