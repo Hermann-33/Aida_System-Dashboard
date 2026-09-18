@@ -124,3 +124,8 @@ export function handleAdminTransactionReport(request: Request, deps: EmployeeBff
 export function handleAdminAuditEvents(request: Request, deps: EmployeeBffDependencies = {}) {
   return handleReport(request, 'get_admin_audit_events', deps);
 }
+
+
+export function handleAdminPaymentAuditEvents(request: Request, deps: EmployeeBffDependencies = {}) {
+  return handleReport(request, 'get_admin_payment_audit_events', deps);
+}
