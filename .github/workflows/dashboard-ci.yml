@@ -2,7 +2,12 @@ name: Dashboard CI
 
 on:
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - codex/phase-1-6-audit-remediation
+      - codex/phase-7-promotions-discounts
+      - codex/phase-8-reporting-accounting-audit
+      - codex/phase-9-payments-refunds-integrations
   workflow_dispatch:
 
 permissions:
