@@ -17,6 +17,10 @@ const validSummary = {
     inventoryQuantitiesGroupedByBaseUnitItem: true,
     statutoryAccountingIncluded: false,
     processorSettlementIncluded: false,
+    refundDataAvailable: true,
+    paymentFactsIncludeCancelledOrders: true,
+    acceptedOrderValueIsSettlement: false,
+    providerSettlementStateAvailable: true,
   },
   filter: { fromDate: '2026-09-16', toDate: '2026-09-16' },
   orders: {
@@ -58,6 +62,25 @@ const validSummary = {
     promotionDiscountSen: 200,
   },
   inventoryMovements: { movementCount: 0, byItem: [] },
+  payments: {
+    capturedOrderCount: 0,
+    grossCapturedSen: 0,
+    cashCapturedSen: 0,
+    externalCapturedSen: 0,
+    pendingExternalSen: 0,
+    succeededRefundSen: 0,
+    cashRefundedSen: 0,
+    externalRefundedSen: 0,
+    netCapturedAfterRefundSen: 0,
+    refundReconciled: true,
+    paymentStateCounts: { unpaid: 1 },
+    externalSettlement: {
+      settledSen: 0,
+      pendingSen: 0,
+      failedSen: 0,
+      notReportedSen: 0,
+    },
+  },
 };
 
 describe('Phase 8 reporting client', () => {
@@ -81,8 +104,11 @@ describe('Phase 8 reporting client', () => {
     vi.stubGlobal('fetch', vi.fn(() => response({
       semantics: {
         totalSen: 'accepted_order_value_not_processor_settlement',
-        refundDataAvailable: false,
+        refundDataAvailable: true,
         processorSettlementIncluded: false,
+        providerLifecycleAvailable: true,
+        acceptedOrderValueUnchangedByRefunds: true,
+        providerSettlementStateAvailable: true,
       },
       filter: {},
       totalCount: '1',
