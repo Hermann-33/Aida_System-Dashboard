@@ -642,7 +642,7 @@ export function parseOrderSnapshot(value: unknown): OrderSnapshot {
 
   if (value.tenderType === 'cash') {
     if (value.source !== 'pos'
-      || !(['paid', 'partially_refunded', 'refunded'] as const).includes(value.paymentState as PaymentState)
+      || !(value.paymentState === 'paid' || value.paymentState === 'partially_refunded' || value.paymentState === 'refunded')
       || !isIsoTimestamp(value.paidAt)) {
       return invalidResponse('Cash payment authority is invalid.');
     }
